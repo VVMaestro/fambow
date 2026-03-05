@@ -28,6 +28,20 @@ func (r *ReminderRepository) SaveReminder(ctx context.Context, telegramUserID in
 		return Reminder{}, err
 	}
 
+	return r.saveReminderForUserID(ctx, userID, text, scheduleType, scheduleValue)
+}
+
+func (r *ReminderRepository) SaveReminderForUserType(ctx context.Context, userType string, text string, scheduleType string, scheduleValue string) (Reminder, error) {
+	userID, err := userIDByType(ctx, r.db, userType)
+	if err != nil {
+		return Reminder{}, err
+	}
+
+	return r.saveReminderForUserID(ctx, userID, text, scheduleType, scheduleValue)
+}
+
+func (r *ReminderRepository) saveReminderForUserID(ctx context.Context, userID int64, text string, scheduleType string, scheduleValue string) (Reminder, error) {
+
 	result, err := r.db.ExecContext(ctx, `
 		INSERT INTO reminders (user_id, text, schedule_type, schedule_value, is_active)
 		VALUES (?, ?, ?, ?, 1)
@@ -183,24 +197,10 @@ func (r *ReminderRepository) MarkReminderDispatched(ctx context.Context, reminde
 	return nil
 }
 
-func (r *ReminderRepository) ensureUser(ctx context.Context, telegramUserID int64, firstName string) (int64, error) {
-	if _, err := r.db.ExecContext(ctx, `
-		INSERT INTO users (telegram_user_id, first_name)
-		VALUES (?, ?)
-		ON CONFLICT(telegram_user_id) DO UPDATE SET first_name = excluded.first_name
-	`, telegramUserID, firstName); err != nil {
-		return 0, fmt.Errorf("upsert user: %w", err)
-	}
-
-	row := r.db.QueryRowContext(ctx, `
-		SELECT id
-		FROM users
-		WHERE telegram_user_id = ?
-	`, telegramUserID)
-
-	var userID int64
-	if err := row.Scan(&userID); err != nil {
-		return 0, fmt.Errorf("fetch user id: %w", err)
+func (r *ReminderRepository) ensureUser(ctx context.Context, telegramUserID int64, _ string) (int64, error) {
+	userID, err := userIDByTelegramUserID(ctx, r.db, telegramUserID)
+	if err != nil {
+		return 0, fmt.Errorf("fetch user: %w", err)
 	}
 
 	return userID, nil

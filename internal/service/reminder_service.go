@@ -26,6 +26,8 @@ var (
 	ErrReminderDateTimeFormat = errors.New("invalid datetime format")
 	ErrReminderTimeInPast     = errors.New("reminder time is in the past")
 	ErrReminderTextEmpty      = errors.New("reminder text cannot be empty")
+	ErrReminderUserNotFound   = errors.New("sender user not found")
+	ErrReminderTargetNotFound = errors.New("target user not found")
 )
 
 type Reminder struct {
@@ -45,6 +47,7 @@ type PendingReminder struct {
 
 type ReminderStore interface {
 	SaveReminder(ctx context.Context, telegramUserID int64, firstName string, text string, scheduleType string, scheduleValue string) (repository.Reminder, error)
+	SaveReminderForUserType(ctx context.Context, userType string, text string, scheduleType string, scheduleValue string) (repository.Reminder, error)
 	ListActiveReminders(ctx context.Context, telegramUserID int64) ([]repository.Reminder, error)
 	ListDueOneTimeReminders(ctx context.Context, nowTimestamp string) ([]repository.ReminderDueItem, error)
 	ListDueDailyReminders(ctx context.Context, scheduleValue string, dispatchDate string) ([]repository.ReminderDueItem, error)
@@ -72,6 +75,36 @@ func (s *ReminderService) AddReminder(ctx context.Context, telegramUserID int64,
 
 	record, err := s.store.SaveReminder(ctx, telegramUserID, strings.TrimSpace(firstName), text, scheduleType, scheduleValue)
 	if err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			return Reminder{}, ErrReminderUserNotFound
+		}
+		return Reminder{}, err
+	}
+
+	return Reminder{
+		ID:              record.ID,
+		Text:            record.Text,
+		ScheduleType:    record.ScheduleType,
+		ScheduleDisplay: formatReminderSchedule(record.ScheduleType, record.ScheduleValue),
+	}, nil
+}
+
+func (s *ReminderService) AddReminderForUserType(ctx context.Context, userType string, command string) (Reminder, error) {
+	payload := strings.TrimSpace(command)
+	if payload == "" {
+		return Reminder{}, ErrReminderCommandEmpty
+	}
+
+	scheduleType, scheduleValue, text, err := parseReminderPayload(payload, time.Now())
+	if err != nil {
+		return Reminder{}, err
+	}
+
+	record, err := s.store.SaveReminderForUserType(ctx, strings.TrimSpace(strings.ToLower(userType)), text, scheduleType, scheduleValue)
+	if err != nil {
+		if errors.Is(err, repository.ErrUserTypeNotFound) {
+			return Reminder{}, ErrReminderTargetNotFound
+		}
 		return Reminder{}, err
 	}
 
@@ -276,6 +309,8 @@ func ReminderUsage() string {
 		"/remind daily 08:00 vitamins",
 		"/remind me at 19:30 to drink tea",
 		"/remind once 2026-03-15 19:30 book tickets",
+		"/remind him at 19:30 to drink tea",
+		"/remind her at 19:30 to drink tea",
 	}
 
 	return strings.Join(lines, "\n")

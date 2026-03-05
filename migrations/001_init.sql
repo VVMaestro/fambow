@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     telegram_user_id INTEGER NOT NULL UNIQUE,
     first_name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('husband', 'wife')),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

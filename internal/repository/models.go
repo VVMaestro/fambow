@@ -6,6 +6,7 @@ type User struct {
 	ID             int64
 	TelegramUserID int64
 	FirstName      string
+	Type           string
 	CreatedAt      time.Time
 }
 

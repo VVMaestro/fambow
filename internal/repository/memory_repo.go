@@ -95,23 +95,10 @@ func (r *MemoryRepository) ListRecentMemories(ctx context.Context, telegramUserI
 }
 
 func (r *MemoryRepository) ensureUser(ctx context.Context, telegramUserID int64, firstName string) (int64, error) {
-	if _, err := r.db.ExecContext(ctx, `
-		INSERT INTO users (telegram_user_id, first_name)
-		VALUES (?, ?)
-		ON CONFLICT(telegram_user_id) DO UPDATE SET first_name = excluded.first_name
-	`, telegramUserID, firstName); err != nil {
-		return 0, fmt.Errorf("upsert user: %w", err)
-	}
-
-	row := r.db.QueryRowContext(ctx, `
-		SELECT id
-		FROM users
-		WHERE telegram_user_id = ?
-	`, telegramUserID)
-
-	var userID int64
-	if err := row.Scan(&userID); err != nil {
-		return 0, fmt.Errorf("fetch user id: %w", err)
+	_ = firstName
+	userID, err := userIDByTelegramUserID(ctx, r.db, telegramUserID)
+	if err != nil {
+		return 0, fmt.Errorf("fetch user: %w", err)
 	}
 
 	return userID, nil

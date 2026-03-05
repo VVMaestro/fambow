@@ -3,18 +3,21 @@ package app
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
 type Config struct {
-	BotToken      string
-	LogLevel      slog.Level
-	DatabasePath  string
-	MigrationFile string
+	BotToken            string
+	LogLevel            slog.Level
+	DatabasePath        string
+	MigrationFile       string
+	AdminTelegramUserID int64
 }
 
 func LoadConfig() (Config, error) {
@@ -25,12 +28,32 @@ func LoadConfig() (Config, error) {
 		return Config{}, errors.New("TELEGRAM_BOT_TOKEN is required")
 	}
 
+	adminTelegramUserID, err := parseInt64Env("TELEGRAM_ADMIN_USER_ID")
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
-		BotToken:      botToken,
-		LogLevel:      parseLogLevel(os.Getenv("LOG_LEVEL")),
-		DatabasePath:  getEnvOrDefault("DATABASE_PATH", "fambow.db"),
-		MigrationFile: getEnvOrDefault("MIGRATION_FILE", "migrations/001_init.sql"),
+		BotToken:            botToken,
+		LogLevel:            parseLogLevel(os.Getenv("LOG_LEVEL")),
+		DatabasePath:        getEnvOrDefault("DATABASE_PATH", "fambow.db"),
+		MigrationFile:       getEnvOrDefault("MIGRATION_FILE", "migrations/001_init.sql"),
+		AdminTelegramUserID: adminTelegramUserID,
 	}, nil
+}
+
+func parseInt64Env(key string) (int64, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", key)
+	}
+
+	return value, nil
 }
 
 func getEnvOrDefault(key string, fallback string) string {

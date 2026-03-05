@@ -16,7 +16,8 @@ Gift-focused Telegram bot written in Go.
    ```
 
 2. Set your token in `.env` (or export env vars in your shell).
-3. Run the bot:
+3. Set `TELEGRAM_ADMIN_USER_ID` in `.env` to your Telegram numeric user ID.
+4. Run the bot:
 
    ```bash
    go run ./cmd/bot
@@ -31,9 +32,18 @@ Gift-focused Telegram bot written in Go.
 - `/memories` - list recent memories
 - `/remind at 19:30 <text>` - one-time reminder (today or tomorrow)
 - `/remind daily 08:00 <text>` - recurring daily reminder
+- `/remind him at 19:30 to <text>` - reminder for husband user
+- `/remind her at 19:30 to <text>` - reminder for wife user
 - `/reminders` - list active reminders
 - `/event add YYYY-MM-DD | Title | 3` - add a celebration date
 - `/events` - list celebration dates
+- `/create_user <telegram_id> <first_name> <husband|wife>` - admin only, adds user to access list
+
+## Access Control
+
+- Every command requires the sender to exist in `users` table.
+- Users not in `users` are blocked from interacting with the bot.
+- Admin Telegram ID from `TELEGRAM_ADMIN_USER_ID` bypasses user check and can run `/create_user`.
 
 ## Data Storage
 

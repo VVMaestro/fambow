@@ -30,7 +30,19 @@ func remindHandler(logger *slog.Logger, reminders ReminderProvider) bot.HandlerF
 		}
 
 		payload := extractCommandPayload(update.Message.Text, "/remind")
-		reminder, err := reminders.AddReminder(ctx, update.Message.From.ID, update.Message.From.FirstName, payload)
+		targetUserType, targetLabel, targetPayload := extractReminderTarget(payload)
+
+		var (
+			reminder service.Reminder
+			err      error
+		)
+
+		if targetUserType == "" {
+			reminder, err = reminders.AddReminder(ctx, update.Message.From.ID, update.Message.From.FirstName, payload)
+		} else {
+			reminder, err = reminders.AddReminderForUserType(ctx, targetUserType, targetPayload)
+		}
+
 		if err != nil {
 			if errors.Is(err, service.ErrReminderCommandEmpty) ||
 				errors.Is(err, service.ErrReminderInvalidFormat) ||
@@ -42,12 +54,25 @@ func remindHandler(logger *slog.Logger, reminders ReminderProvider) bot.HandlerF
 				return
 			}
 
+			if errors.Is(err, service.ErrReminderTargetNotFound) {
+				sendText(ctx, b, update.Message.Chat.ID, "I could not find that partner in the database yet. Ask both users to use the bot once, then try again.", logger, "/remind target missing")
+				return
+			}
+
+			if errors.Is(err, service.ErrReminderUserNotFound) {
+				sendText(ctx, b, update.Message.Chat.ID, "I could not find your user in the database.", logger, "/remind sender missing")
+				return
+			}
+
 			logger.Error("failed to create reminder", "error", err)
 			sendText(ctx, b, update.Message.Chat.ID, "I could not save your reminder right now. Please try again in a moment.", logger, "/remind save failed")
 			return
 		}
 
 		confirmation := fmt.Sprintf("Reminder saved: %s\n- %s", reminder.ScheduleDisplay, reminder.Text)
+		if targetUserType != "" {
+			confirmation = fmt.Sprintf("Reminder saved for %s: %s\n- %s", targetLabel, reminder.ScheduleDisplay, reminder.Text)
+		}
 		sendText(ctx, b, update.Message.Chat.ID, confirmation, logger, "/remind saved")
 	}
 }
@@ -101,4 +126,20 @@ func extractCommandPayload(message string, command string) string {
 	}
 
 	return ""
+}
+
+func extractReminderTarget(payload string) (string, string, string) {
+	parts := strings.Fields(strings.TrimSpace(payload))
+	if len(parts) < 2 {
+		return "", "", payload
+	}
+
+	switch strings.ToLower(parts[0]) {
+	case "him":
+		return "husband", "him", strings.TrimSpace(strings.Join(parts[1:], " "))
+	case "her":
+		return "wife", "her", strings.TrimSpace(strings.Join(parts[1:], " "))
+	default:
+		return "", "", payload
+	}
 }

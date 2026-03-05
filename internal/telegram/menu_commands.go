@@ -19,6 +19,7 @@ func registerMenuCommands(ctx context.Context, b *bot.Bot, logger *slog.Logger) 
 		{Command: "reminders", Description: "List active reminders"},
 		{Command: "event", Description: "Add a celebration date"},
 		{Command: "events", Description: "List celebration dates"},
+		{Command: "create_user", Description: "Admin: create bot user"},
 	}
 
 	_, err := b.SetMyCommands(ctx, &bot.SetMyCommandsParams{

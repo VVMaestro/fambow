@@ -27,6 +27,7 @@ type MemoryProvider interface {
 
 type ReminderProvider interface {
 	AddReminder(ctx context.Context, telegramUserID int64, firstName string, command string) (service.Reminder, error)
+	AddReminderForUserType(ctx context.Context, userType string, command string) (service.Reminder, error)
 	ListReminders(ctx context.Context, telegramUserID int64) ([]service.Reminder, error)
 }
 
@@ -35,13 +36,18 @@ type CelebrationProvider interface {
 	ListEvents(ctx context.Context, telegramUserID int64) ([]service.CelebrationEvent, error)
 }
 
-func NewBot(token string, logger *slog.Logger, loveNotes LoveNoteProvider, memories MemoryProvider, reminders ReminderProvider, celebrations CelebrationProvider) (*bot.Bot, error) {
+type UserProvider interface {
+	IsRegistered(ctx context.Context, telegramUserID int64) (bool, error)
+	CreateUser(ctx context.Context, telegramUserID int64, firstName string, userType string) (service.User, error)
+}
+
+func NewBot(token string, logger *slog.Logger, loveNotes LoveNoteProvider, memories MemoryProvider, reminders ReminderProvider, celebrations CelebrationProvider, users UserProvider, adminTelegramUserID int64) (*bot.Bot, error) {
 	b, err := bot.New(token, bot.WithDefaultHandler(defaultHandler(logger)))
 	if err != nil {
 		return nil, fmt.Errorf("init telegram client: %w", err)
 	}
 
-	registerCoreHandlers(b, logger, loveNotes, memories, reminders, celebrations)
+	registerCoreHandlers(b, logger, loveNotes, memories, reminders, celebrations, users, adminTelegramUserID)
 	registerMenuCommands(context.Background(), b, logger)
 	return b, nil
 }
