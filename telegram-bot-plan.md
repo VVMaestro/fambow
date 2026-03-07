@@ -275,10 +275,11 @@ Deliverable: bot feels polished and gift-ready.
 Deliverable: always-on bot reachable from Telegram.
 
 ## Phase 6 - Additions
-- Add Photos to memories
+- ~~Add Photos to memories~~
 - Add Voice Memos to memories
-- Split functionality to wife/husband interaction
+- ~~Split functionality to wife/husband interaction~~
 - Add daily / random by command memories sharing
+- Add custom date to memories and fix photo memories sharing order
 
 ---
 

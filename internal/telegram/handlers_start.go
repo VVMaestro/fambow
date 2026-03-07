@@ -21,6 +21,7 @@ func registerCoreHandlers(b *bot.Bot, logger *slog.Logger, loveNotes LoveNotePro
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/love", bot.MatchTypeExact, guard(loveHandler(logger, loveNotes)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/add_love", bot.MatchTypePrefix, guard(addLoveNoteHandler(logger, loveNotes)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/memory", bot.MatchTypePrefix, guard(memoryHandler(logger, memories)))
+	b.RegisterHandler(bot.HandlerTypePhotoCaption, "/memory", bot.MatchTypePrefix, guard(memoryPhotoHandler(logger, memories)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/memories", bot.MatchTypeExact, guard(memoriesHandler(logger, memories)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/reminders", bot.MatchTypeExact, guard(remindersHandler(logger, reminders)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/remind", bot.MatchTypePrefix, guard(remindHandler(logger, reminders)))
@@ -53,7 +54,7 @@ func helpHandler(logger *slog.Logger) bot.HandlerFunc {
 
 		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: update.Message.Chat.ID,
-			Text:   "Available commands:\n/start - welcome message\n/help - command list\n/love - instant love note\n/memory <text> - save a sweet memory\n/memories - show recent memories\n/remind ... - create a reminder\n/remind him at HH:MM to ... - reminder for husband\n/remind her at HH:MM to ... - reminder for wife\n/reminders - list active reminders\n/event add ... - add celebration date\n/events - list celebration dates\n/create_user <telegram_id> <first_name> <husband|wife> - admin only",
+			Text:   "Available commands:\n/start - welcome message\n/help - command list\n/love - instant love note\n/memory <text> - save a sweet memory\n/memory YYYY-MM-DD | <text> - save memory with custom date\n/memory photo with caption - save a memory with photo\n/memories - show recent memories\n/remind ... - create a reminder\n/remind him at HH:MM to ... - reminder for husband\n/remind her at HH:MM to ... - reminder for wife\n/reminders - list active reminders\n/event add ... - add celebration date\n/events - list celebration dates\n/create_user <telegram_id> <first_name> <husband|wife> - admin only",
 		})
 		if err != nil {
 			logger.Error("failed to send /help response", "error", err)

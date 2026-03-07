@@ -21,7 +21,7 @@ type LoveNoteProvider interface {
 }
 
 type MemoryProvider interface {
-	AddMemory(ctx context.Context, telegramUserID int64, firstName string, text string) (service.Memory, error)
+	AddMemory(ctx context.Context, telegramUserID int64, firstName string, input service.MemoryInput) (service.Memory, error)
 	RecentMemories(ctx context.Context, telegramUserID int64, limit int) ([]service.Memory, error)
 }
 

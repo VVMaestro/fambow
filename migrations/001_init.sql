@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS memories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     text TEXT NOT NULL,
+    telegram_file_id TEXT,
+    telegram_file_unique_id TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -56,3 +58,4 @@ CREATE TABLE IF NOT EXISTS event_dispatches (
 
 CREATE INDEX IF NOT EXISTS idx_reminders_active_type_value ON reminders(is_active, schedule_type, schedule_value);
 CREATE INDEX IF NOT EXISTS idx_events_date_days_before ON events(event_date, remind_days_before);
+CREATE INDEX IF NOT EXISTS idx_memories_telegram_file_unique_id ON memories(telegram_file_unique_id);

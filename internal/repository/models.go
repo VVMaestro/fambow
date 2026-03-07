@@ -20,10 +20,12 @@ type Reminder struct {
 }
 
 type Memory struct {
-	ID        int64
-	UserID    int64
-	Text      string
-	CreatedAt time.Time
+	ID                 int64
+	UserID             int64
+	Text               string
+	TelegramFileID     string
+	TelegramFileUnique string
+	CreatedAt          time.Time
 }
 
 type LoveNote struct {

@@ -28,8 +28,11 @@ Gift-focused Telegram bot written in Go.
 - `/start` - warm welcome
 - `/help` - command list
 - `/love` - instant love note
-- `/memory <text>` - save a happy moment
-- `/memories` - list recent memories
+- `/memory <text>` - save a text memory
+- `/memory YYYY-MM-DD | <text>` - save memory with custom date (date cannot be in the future)
+- photo with caption `/memory <text optional>` - save a memory with attached photo
+- photo with caption `/memory YYYY-MM-DD | <text optional>` - save photo memory with custom date
+- `/memories` - list recent memories (re-sends saved photos)
 - `/remind at 19:30 <text>` - one-time reminder (today or tomorrow)
 - `/remind daily 08:00 <text>` - recurring daily reminder
 - `/remind him at 19:30 to <text>` - reminder for husband user
