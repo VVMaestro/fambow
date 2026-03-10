@@ -15,6 +15,7 @@ func registerMenuCommands(ctx context.Context, b *bot.Bot, logger *slog.Logger) 
 		{Command: "love", Description: "Send a love note"},
 		{Command: "memory", Description: "Save memory (text/photo/date)"},
 		{Command: "memories", Description: "Show recent memories"},
+		{Command: "surprise_memory", Description: "Send random memory"},
 		{Command: "remind", Description: "Create a reminder"},
 		{Command: "reminders", Description: "List active reminders"},
 		{Command: "event", Description: "Add a celebration date"},

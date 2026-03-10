@@ -279,7 +279,7 @@ Deliverable: always-on bot reachable from Telegram.
 - Add Voice Memos to memories
 - ~~Split functionality to wife/husband interaction~~
 - Add daily / random by command memories sharing
-- Add custom date to memories and fix photo memories sharing order
+- ~~Add custom date to memories and fix photo memories sharing order~~
 
 ---
 

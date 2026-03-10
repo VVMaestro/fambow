@@ -3,11 +3,14 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
 
 const memoryDateTimeLayout = "2006-01-02 15:04:05"
+
+var ErrMemoryNotFound = errors.New("memory not found")
 
 type MemoryRepository struct {
 	db *sql.DB
@@ -105,6 +108,25 @@ func (r *MemoryRepository) ListRecentMemories(ctx context.Context, telegramUserI
 	}
 
 	return memories, nil
+}
+
+func (r *MemoryRepository) RandomMemory(ctx context.Context) (Memory, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, user_id, text, telegram_file_id, telegram_file_unique_id, created_at
+		FROM memories
+		ORDER BY RANDOM()
+		LIMIT 1
+	`)
+
+	var memory Memory
+	if err := row.Scan(&memory.ID, &memory.UserID, &memory.Text, &memory.TelegramFileID, &memory.TelegramFileUnique, &memory.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Memory{}, ErrMemoryNotFound
+		}
+		return Memory{}, fmt.Errorf("query random memory: %w", err)
+	}
+
+	return memory, nil
 }
 
 func (r *MemoryRepository) ensureUser(ctx context.Context, telegramUserID int64, firstName string) (int64, error) {

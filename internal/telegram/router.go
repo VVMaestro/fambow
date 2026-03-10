@@ -23,6 +23,7 @@ type LoveNoteProvider interface {
 type MemoryProvider interface {
 	AddMemory(ctx context.Context, telegramUserID int64, firstName string, input service.MemoryInput) (service.Memory, error)
 	RecentMemories(ctx context.Context, telegramUserID int64, limit int) ([]service.Memory, error)
+	RandomMemory(ctx context.Context) (service.Memory, error)
 }
 
 type ReminderProvider interface {
@@ -47,7 +48,8 @@ func NewBot(token string, logger *slog.Logger, loveNotes LoveNoteProvider, memor
 		return nil, fmt.Errorf("init telegram client: %w", err)
 	}
 
-	registerCoreHandlers(b, logger, loveNotes, memories, reminders, celebrations, users, adminTelegramUserID)
+	memoryIntake := newMemoryIntakeState()
+	registerCoreHandlers(b, logger, loveNotes, memories, reminders, celebrations, users, adminTelegramUserID, memoryIntake)
 	registerMenuCommands(context.Background(), b, logger)
 	return b, nil
 }

@@ -53,8 +53,9 @@ func loveHandler(logger *slog.Logger, loveNotes LoveNoteProvider) bot.HandlerFun
 		}
 
 		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: update.Message.Chat.ID,
-			Text:   text,
+			ChatID:      update.Message.Chat.ID,
+			Text:        text,
+			ReplyMarkup: loveCommandKeyboard(),
 		})
 		if err != nil {
 			logger.Error("failed to send /love response", "error", err)

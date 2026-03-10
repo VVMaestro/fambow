@@ -13,6 +13,10 @@ type memoryStoreSpy struct {
 	saveCalled bool
 	saveInput  memorySaveInput
 
+	randomCalled bool
+	randomResult repository.Memory
+	randomErr    error
+
 	result repository.Memory
 	err    error
 }
@@ -69,6 +73,16 @@ func (s *memoryStoreSpy) ListRecentMemories(ctx context.Context, telegramUserID 
 	_ = telegramUserID
 	_ = limit
 	return nil, nil
+}
+
+func (s *memoryStoreSpy) RandomMemory(ctx context.Context) (repository.Memory, error) {
+	_ = ctx
+	s.randomCalled = true
+	if s.randomErr != nil {
+		return repository.Memory{}, s.randomErr
+	}
+
+	return s.randomResult, nil
 }
 
 func TestAddMemoryWithoutCustomDate(t *testing.T) {
@@ -182,5 +196,43 @@ func TestAddMemoryKeepsPipeWhenNotDatePrefix(t *testing.T) {
 	}
 	if store.saveInput.createdAt != nil {
 		t.Fatal("expected nil custom date when prefix is not date")
+	}
+}
+
+func TestRandomMemory(t *testing.T) {
+	createdAt := time.Date(2024, time.June, 1, 10, 30, 0, 0, time.Local)
+	store := &memoryStoreSpy{randomResult: repository.Memory{
+		Text:               "Road trip to the sea",
+		CreatedAt:          createdAt,
+		TelegramFileID:     "photo-123",
+		TelegramFileUnique: "photo-uniq-123",
+	}}
+	svc := NewMemoryService(store)
+
+	memory, err := svc.RandomMemory(context.Background())
+	if err != nil {
+		t.Fatalf("RandomMemory() unexpected error: %v", err)
+	}
+	if !store.randomCalled {
+		t.Fatal("RandomMemory store method was not called")
+	}
+	if memory.Text != store.randomResult.Text {
+		t.Fatalf("memory text mismatch: got %q", memory.Text)
+	}
+	if !memory.CreatedAt.Equal(createdAt) {
+		t.Fatalf("memory date mismatch: got %s", memory.CreatedAt)
+	}
+	if memory.TelegramFileID != store.randomResult.TelegramFileID {
+		t.Fatalf("memory file id mismatch: got %q", memory.TelegramFileID)
+	}
+}
+
+func TestRandomMemoryNotFound(t *testing.T) {
+	store := &memoryStoreSpy{randomErr: repository.ErrMemoryNotFound}
+	svc := NewMemoryService(store)
+
+	_, err := svc.RandomMemory(context.Background())
+	if !errors.Is(err, ErrMemoryNotFound) {
+		t.Fatalf("expected ErrMemoryNotFound, got %v", err)
 	}
 }
