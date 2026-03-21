@@ -17,6 +17,17 @@ func addLoveNoteHandler(logger *slog.Logger, loveNotes LoveNoteProvider) bot.Han
 
 		note := extractAddLoveNote(update.Message.Text)
 
+		if note == "" {
+			_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "Please provide a love note to add.",
+			})
+			if err != nil {
+				logger.Error("failed to send /add_love response", "error", err)
+			}
+			return
+		}
+
 		err := loveNotes.AddLoveNote(ctx, note)
 		if err != nil {
 			logger.Error("failed to add love note", "error", err)

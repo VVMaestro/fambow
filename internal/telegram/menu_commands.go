@@ -13,6 +13,7 @@ func registerMenuCommands(ctx context.Context, b *bot.Bot, logger *slog.Logger) 
 		{Command: "start", Description: "Show welcome message"},
 		{Command: "help", Description: "Show available commands"},
 		{Command: "love", Description: "Send a love note"},
+		{Command: "add_love", Description: "Add a love note"},
 		{Command: "memory", Description: "Save memory (text/photo/date)"},
 		{Command: "memories", Description: "Show recent memories"},
 		{Command: "surprise_memory", Description: "Send random memory"},
