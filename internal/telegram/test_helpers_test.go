@@ -184,7 +184,7 @@ func newTestBotHarness(t *testing.T, deps testBotDeps) *testBotHarness {
 		deps.celebrations,
 		deps.users,
 		deps.adminTelegramUserID,
-		newMemoryIntakeState(),
+		newMemoryWizardState(),
 		newReminderWizardState(),
 	)
 	if deps.registerMenuCommands {
@@ -228,6 +228,21 @@ func newPhotoUpdate(userID, chatID int64, caption string, photos []models.PhotoS
 			From: &models.User{
 				ID:        userID,
 				FirstName: "Anna",
+			},
+		},
+	}
+}
+
+func newCallbackUpdate(userID, chatID int64, data string) *models.Update {
+	return &models.Update{
+		CallbackQuery: &models.CallbackQuery{
+			ID:   "callback-1",
+			From: models.User{ID: userID, FirstName: "Anna"},
+			Data: data,
+			Message: models.MaybeInaccessibleMessage{
+				Message: &models.Message{
+					Chat: models.Chat{ID: chatID},
+				},
 			},
 		},
 	}

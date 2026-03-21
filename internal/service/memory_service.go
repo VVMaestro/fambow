@@ -49,13 +49,21 @@ func (s *MemoryService) AddMemory(ctx context.Context, telegramUserID int64, fir
 	input.Text = strings.TrimSpace(input.Text)
 	input.TelegramFileID = strings.TrimSpace(input.TelegramFileID)
 	input.TelegramFileUnique = strings.TrimSpace(input.TelegramFileUnique)
+	now := time.Now()
 
-	parsedText, customDate, err := parseMemoryPayload(input.Text, time.Now())
+	parsedText, customDate, err := parseMemoryPayload(input.Text, now)
 	if err != nil {
 		return Memory{}, err
 	}
 	input.Text = parsedText
-	input.CreatedAt = customDate
+	if input.CreatedAt != nil {
+		input.CreatedAt, err = normalizeMemoryDate(input.CreatedAt, now)
+		if err != nil {
+			return Memory{}, err
+		}
+	} else {
+		input.CreatedAt = customDate
+	}
 
 	if input.Text == "" && input.TelegramFileID == "" {
 		return Memory{}, ErrMemoryContentEmpty
@@ -142,6 +150,21 @@ func parseMemoryPayload(payload string, now time.Time) (string, *time.Time, erro
 
 	customDate := time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 0, 0, 0, 0, now.Location())
 	return strings.TrimSpace(textPart), &customDate, nil
+}
+
+func normalizeMemoryDate(createdAt *time.Time, now time.Time) (*time.Time, error) {
+	if createdAt == nil {
+		return nil, nil
+	}
+
+	localDate := createdAt.In(now.Location())
+	normalized := time.Date(localDate.Year(), localDate.Month(), localDate.Day(), 0, 0, 0, 0, now.Location())
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if normalized.After(today) {
+		return nil, ErrMemoryDateInFuture
+	}
+
+	return &normalized, nil
 }
 
 func isMemoryDateCandidate(value string) bool {

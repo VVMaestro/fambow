@@ -102,6 +102,39 @@ func TestLoveCommands(t *testing.T) {
 }
 
 func TestMemoryCommands(t *testing.T) {
+	t.Run("memory command starts wizard when empty", func(t *testing.T) {
+		memories := &memoryProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			memories:            memories,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/memory"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if !strings.Contains(request.Fields["text"], "Step 1: send one text message or one photo") {
+			t.Fatalf("unexpected /memory wizard response: %q", request.Fields["text"])
+		}
+		if memories.addInput.Text != "" || memories.addInput.TelegramFileID != "" {
+			t.Fatal("expected empty /memory not to save immediately")
+		}
+	})
+
+	t.Run("memory button starts same wizard", func(t *testing.T) {
+		memories := &memoryProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			memories:            memories,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "Memory"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if !strings.Contains(request.Fields["text"], "Step 1: send one text message or one photo") {
+			t.Fatalf("unexpected Memory button response: %q", request.Fields["text"])
+		}
+	})
+
 	t.Run("memory saves text payload", func(t *testing.T) {
 		memories := &memoryProviderSpy{}
 		harness := newTestBotHarness(t, testBotDeps{
@@ -158,6 +191,144 @@ func TestMemoryCommands(t *testing.T) {
 		request := harness.client.lastRequest("sendMessage")
 		if request.Fields["text"] != "Memory with photo saved. I will keep this moment safe for you." {
 			t.Fatalf("unexpected /memory photo response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("empty memory photo starts wizard with preloaded photo", func(t *testing.T) {
+		memories := &memoryProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			memories:            memories,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newPhotoUpdate(1, 100, "/memory", []models.PhotoSize{
+			{FileID: "small", FileUniqueID: "small-uniq", FileSize: 10},
+			{FileID: "large", FileUniqueID: "large-uniq", FileSize: 20},
+		}))
+
+		request := harness.client.lastRequest("sendMessage")
+		if !strings.Contains(request.Fields["text"], "Step 2: save this memory for today or pick a custom date?") {
+			t.Fatalf("unexpected preloaded photo wizard response: %q", request.Fields["text"])
+		}
+		markup := parseInlineKeyboardMarkup(t, request.Fields["reply_markup"])
+		if !inlineKeyboardContains(markup, "Today") || !inlineKeyboardContains(markup, "Custom Date") || !inlineKeyboardContains(markup, "Cancel") {
+			t.Fatalf("unexpected memory wizard keyboard: %#v", markup)
+		}
+		if memories.addInput.TelegramFileID != "" {
+			t.Fatal("expected empty photo-caption /memory not to save immediately")
+		}
+	})
+
+	t.Run("memory wizard saves text for today", func(t *testing.T) {
+		memories := &memoryProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			memories:            memories,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/memory"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "Road trip to the lake"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, memoryWizardCallbackPrefix+"date:today"))
+
+		if memories.addInput.Text != "Road trip to the lake" {
+			t.Fatalf("expected wizard text to be saved, got %q", memories.addInput.Text)
+		}
+		if memories.addInput.CreatedAt != nil {
+			t.Fatal("expected Today path to keep createdAt nil for service default")
+		}
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Memory saved. I will keep this moment safe for you." {
+			t.Fatalf("unexpected memory wizard save response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("memory wizard keeps session on invalid and future custom date", func(t *testing.T) {
+		memories := &memoryProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			memories:            memories,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/memory"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "Concert night"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, memoryWizardCallbackPrefix+"date:custom"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "broken"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Send the date as YYYY-MM-DD. Example: 2020-06-12" {
+			t.Fatalf("unexpected invalid custom date response: %q", request.Fields["text"])
+		}
+
+		futureDate := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+		processUpdate(t, harness, newTextUpdate(1, 100, futureDate))
+
+		request = harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "That date is in the future. Send a past date or today." {
+			t.Fatalf("unexpected future custom date response: %q", request.Fields["text"])
+		}
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "2020-06-12"))
+
+		if memories.addInput.CreatedAt == nil {
+			t.Fatal("expected valid custom date to be passed to memory save")
+		}
+		if got := memories.addInput.CreatedAt.Format("2006-01-02"); got != "2020-06-12" {
+			t.Fatalf("unexpected wizard custom date: %q", got)
+		}
+
+		request = harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Memory saved. I will keep this moment safe for you." {
+			t.Fatalf("unexpected custom date save response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("memory wizard can save preloaded photo for today", func(t *testing.T) {
+		memories := &memoryProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			memories:            memories,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newPhotoUpdate(1, 100, "/memory", []models.PhotoSize{
+			{FileID: "small", FileUniqueID: "small-uniq", FileSize: 10},
+			{FileID: "large", FileUniqueID: "large-uniq", FileSize: 20},
+		}))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, memoryWizardCallbackPrefix+"date:today"))
+
+		if memories.addInput.TelegramFileID != "large" {
+			t.Fatalf("expected preloaded photo id to be saved, got %q", memories.addInput.TelegramFileID)
+		}
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Memory with photo saved. I will keep this moment safe for you." {
+			t.Fatalf("unexpected wizard photo save response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("memory wizard ignores unrelated commands and allows cancel", func(t *testing.T) {
+		memories := &memoryProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			memories:            memories,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/memory"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "/help"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if !strings.Contains(request.Fields["text"], "Available commands:") {
+			t.Fatalf("expected /help to handle command during wizard, got %q", request.Fields["text"])
+		}
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "cancel"))
+
+		request = harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Memory flow canceled." {
+			t.Fatalf("unexpected memory cancel response: %q", request.Fields["text"])
+		}
+		if memories.addInput.Text != "" || memories.addInput.TelegramFileID != "" {
+			t.Fatal("expected canceled wizard not to save memory")
 		}
 	})
 

@@ -49,9 +49,9 @@ func NewBot(token string, logger *slog.Logger, loveNotes LoveNoteProvider, memor
 		return nil, fmt.Errorf("init telegram client: %w", err)
 	}
 
-	memoryIntake := newMemoryIntakeState()
+	memoryWizard := newMemoryWizardState()
 	reminderWizard := newReminderWizardState()
-	registerCoreHandlers(b, logger, loveNotes, memories, reminders, celebrations, users, adminTelegramUserID, memoryIntake, reminderWizard)
+	registerCoreHandlers(b, logger, loveNotes, memories, reminders, celebrations, users, adminTelegramUserID, memoryWizard, reminderWizard)
 	registerMenuCommands(context.Background(), b, logger)
 	return b, nil
 }

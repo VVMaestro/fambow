@@ -1,6 +1,7 @@
 .env
 bin/
 dist/
+.gocache/
 *.db
 *.db-shm
 *.db-wal

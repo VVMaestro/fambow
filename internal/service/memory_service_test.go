@@ -131,6 +131,33 @@ func TestAddMemoryWithCustomDate(t *testing.T) {
 	}
 }
 
+func TestAddMemoryWithExplicitCreatedAt(t *testing.T) {
+	store := &memoryStoreSpy{}
+	svc := NewMemoryService(store)
+	customDate := time.Date(2020, time.June, 12, 18, 45, 0, 0, time.Local)
+
+	_, err := svc.AddMemory(context.Background(), 101, "Anna", MemoryInput{
+		Text:      "Our first trip",
+		CreatedAt: &customDate,
+	})
+	if err != nil {
+		t.Fatalf("AddMemory() unexpected error: %v", err)
+	}
+
+	if !store.saveCalled {
+		t.Fatal("SaveMemory was not called")
+	}
+	if store.saveInput.createdAt == nil {
+		t.Fatal("expected explicit date to be passed to SaveMemory")
+	}
+	if got := store.saveInput.createdAt.Format(memoryDateLayout); got != "2020-06-12" {
+		t.Fatalf("explicit date mismatch: got %q", got)
+	}
+	if store.saveInput.createdAt.Hour() != 0 || store.saveInput.createdAt.Minute() != 0 || store.saveInput.createdAt.Second() != 0 {
+		t.Fatalf("expected normalized midnight datetime, got %s", store.saveInput.createdAt.Format(time.RFC3339))
+	}
+}
+
 func TestAddMemoryRejectsInvalidCustomDate(t *testing.T) {
 	store := &memoryStoreSpy{}
 	svc := NewMemoryService(store)
