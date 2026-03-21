@@ -16,7 +16,7 @@ type Config struct {
 	BotToken            string
 	LogLevel            slog.Level
 	DatabasePath        string
-	MigrationFile       string
+	MigrationsDir       string
 	AdminTelegramUserID int64
 }
 
@@ -37,9 +37,18 @@ func LoadConfig() (Config, error) {
 		BotToken:            botToken,
 		LogLevel:            parseLogLevel(os.Getenv("LOG_LEVEL")),
 		DatabasePath:        getEnvOrDefault("DATABASE_PATH", "fambow.db"),
-		MigrationFile:       getEnvOrDefault("MIGRATION_FILE", "migrations/001_init.sql"),
+		MigrationsDir:       getMigrationsDir(),
 		AdminTelegramUserID: adminTelegramUserID,
 	}, nil
+}
+
+func getMigrationsDir() string {
+	if value := strings.TrimSpace(os.Getenv("MIGRATIONS_DIR")); value != "" {
+		return value
+	}
+
+	legacyMigrationFile := getEnvOrDefault("MIGRATION_FILE", filepath.Join("migrations", "001_init.sql"))
+	return filepath.Dir(legacyMigrationFile)
 }
 
 func parseInt64Env(key string) (int64, error) {

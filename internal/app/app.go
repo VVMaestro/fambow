@@ -27,7 +27,7 @@ func New(cfg Config, logger *slog.Logger) (*App, error) {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	if err := repository.RunMigrationFile(context.Background(), db, cfg.MigrationFile); err != nil {
+	if err := repository.RunMigrations(context.Background(), db, cfg.MigrationsDir); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}

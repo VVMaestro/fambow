@@ -23,6 +23,28 @@ Gift-focused Telegram bot written in Go.
    go run ./cmd/bot
    ```
 
+## Deploy With Docker Compose
+
+Use the included `docker-compose.yml` when deploying through Coolify as a Docker Compose application.
+
+Required environment variables in the Coolify UI:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_ADMIN_USER_ID`
+
+Optional environment variables:
+
+- `LOG_LEVEL` (`info` by default)
+- `TZ` (`UTC` by default, affects scheduler timing because the app uses local process time)
+
+The Compose setup persists SQLite data in a named volume mounted at `/data`, and the container stores the database at `/data/fambow.db`. Migrations are loaded from `/app/migrations` and applied in filename order.
+
+To run it outside Coolify:
+
+```bash
+docker compose up --build -d
+```
+
 ## Current Commands
 
 - `/start` - warm welcome
@@ -56,7 +78,7 @@ Gift-focused Telegram bot written in Go.
 ## Data Storage
 
 - Uses SQLite file database (default `fambow.db`)
-- Applies schema from `migrations/001_init.sql` on startup
+- Applies all `.sql` files from `migrations/` on startup in filename order
 - Seeds default love notes into `love_notes` table when empty
 - Scheduler checks every minute and dispatches due reminders/events
 
@@ -68,4 +90,4 @@ Gift-focused Telegram bot written in Go.
 - `internal/service` - business logic placeholders
 - `internal/repository` - data model placeholders
 - `internal/scheduler` - scheduler placeholder
-- `migrations/001_init.sql` - initial database schema
+- `migrations/` - ordered SQL migrations applied on startup

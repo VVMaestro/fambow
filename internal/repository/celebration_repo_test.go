@@ -72,8 +72,8 @@ func openCelebrationTestDB(t *testing.T) *sql.DB {
 	})
 
 	migrationFile := filepath.Join("..", "..", "migrations", "001_init.sql")
-	if err := RunMigrationFile(context.Background(), db, migrationFile); err != nil {
-		t.Fatalf("RunMigrationFile(): %v", err)
+	if err := RunMigrations(context.Background(), db, filepath.Dir(migrationFile)); err != nil {
+		t.Fatalf("RunMigrations(): %v", err)
 	}
 
 	return db
