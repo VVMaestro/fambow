@@ -28,6 +28,7 @@ func registerCoreHandlers(b *bot.Bot, logger *slog.Logger, loveNotes LoveNotePro
 	b.RegisterHandler(bot.HandlerTypeMessageText, "Event", bot.MatchTypeExact, guard(eventWizardStartHandler(logger, celebrations, eventWizard)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "Events", bot.MatchTypeExact, guard(eventsHandler(logger, celebrations)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/add_love", bot.MatchTypePrefix, guard(addLoveNoteHandler(logger, loveNotes)))
+	b.RegisterHandler(bot.HandlerTypePhotoCaption, "/add_love", bot.MatchTypePrefix, guard(addLoveNotePhotoHandler(logger, loveNotes)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/memory", bot.MatchTypePrefix, guard(memoryHandler(logger, memories, memoryWizard)))
 	b.RegisterHandler(bot.HandlerTypePhotoCaption, "/memory", bot.MatchTypePrefix, guard(memoryPhotoHandler(logger, memories, memoryWizard)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/memories", bot.MatchTypeExact, guard(memoriesHandler(logger, memories)))
@@ -54,7 +55,7 @@ func startHandler(logger *slog.Logger) bot.HandlerFunc {
 
 		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      update.Message.Chat.ID,
-			Text:        "Hi my love! This is your cozy companion bot.\n\nUse /help to see what I can do so far, or tap one of the buttons below for Love Notes, Memories, Reminder, My Reminders, Event, or Events. `/memory` and `/event` also start guided flows.",
+			Text:        "Hi my love! This is your cozy companion bot.\n\nUse /help to see what I can do so far, or tap one of the buttons below for Love Notes, Memories, Reminder, My Reminders, Event, or Events. You can also save a photo love note with a photo caption `/add_love`, and `/memory` and `/event` start guided flows.",
 			ReplyMarkup: commandKeyboard(),
 		})
 		if err != nil {
@@ -71,7 +72,7 @@ func helpHandler(logger *slog.Logger) bot.HandlerFunc {
 
 		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      update.Message.Chat.ID,
-			Text:        "Available commands:\n/start - welcome message\n/help - command list\n/love - instant love note\n/add_love - add a love note\n/memory - guided memory creator\nShortcut: /memory <text>\nShortcut: /memory YYYY-MM-DD | <text>\nPhoto shortcut: send a photo with caption /memory <optional note> or /memory YYYY-MM-DD | <optional note>\n/memories - show recent memories\n/surprise_memory - share a random memory\n/reminder - guided reminder creator\n/remind ... - create a reminder via text\n/remind him at HH:MM to ... - reminder for husband\n/remind her at HH:MM to ... - reminder for wife\n/reminders - list active reminders\n/event - guided celebration creator\nShortcut: /event add YYYY-MM-DD | Title | Days\n/events - list celebration dates\n/create_user <telegram_id> <first_name> <husband|wife> - admin only\n\nQuick buttons:\nTap Love Note, Memory, Memories, Surprise Memory, Reminder, My Reminders, Event, or Events for shortcuts.",
+			Text:        "Available commands:\n/start - welcome message\n/help - command list\n/love - instant love note\n/add_love - add a love note\nPhoto shortcut: send a photo with caption /add_love <optional note>\n/memory - guided memory creator\nShortcut: /memory <text>\nShortcut: /memory YYYY-MM-DD | <text>\nPhoto shortcut: send a photo with caption /memory <optional note> or /memory YYYY-MM-DD | <optional note>\n/memories - show recent memories\n/surprise_memory - share a random memory\n/reminder - guided reminder creator\n/remind ... - create a reminder via text\n/remind him at HH:MM to ... - reminder for husband\n/remind her at HH:MM to ... - reminder for wife\n/reminders - list active reminders\n/event - guided celebration creator\nShortcut: /event add YYYY-MM-DD | Title | Days\n/events - list celebration dates\n/create_user <telegram_id> <first_name> <husband|wife> - admin only\n\nQuick buttons:\nTap Love Note, Memory, Memories, Surprise Memory, Reminder, My Reminders, Event, or Events for shortcuts.",
 			ReplyMarkup: commandKeyboard(),
 		})
 		if err != nil {

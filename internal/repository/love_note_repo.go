@@ -26,20 +26,38 @@ func (r *LoveNoteRepository) AddDefaultNotes(ctx context.Context, notes []string
 		return nil
 	}
 
-	r.AddNotes(ctx, notes)
+	if err := r.addTextNotes(ctx, notes, "default"); err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (r *LoveNoteRepository) AddNotes(ctx context.Context, notes []string) error {
+func (r *LoveNoteRepository) AddLoveNote(ctx context.Context, note LoveNote) error {
+	trimmedText := strings.TrimSpace(note.Text)
+	telegramFileID := strings.TrimSpace(note.TelegramFileID)
+	telegramFileUnique := strings.TrimSpace(note.TelegramFileUnique)
+
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO love_notes (text, tag, telegram_file_id, telegram_file_unique_id)
+		VALUES (?, ?, ?, ?)
+	`, trimmedText, "custom", nullableString(telegramFileID), nullableString(telegramFileUnique))
+	if err != nil {
+		return fmt.Errorf("insert love note: %w", err)
+	}
+
+	return nil
+}
+
+func (r *LoveNoteRepository) addTextNotes(ctx context.Context, notes []string, tag string) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin love notes transaction: %w", err)
 	}
 
 	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO love_notes (text, tag)
-		VALUES (?, ?)
+		INSERT INTO love_notes (text, tag, telegram_file_id, telegram_file_unique_id)
+		VALUES (?, ?, NULL, NULL)
 	`)
 	if err != nil {
 		_ = tx.Rollback()
@@ -53,7 +71,7 @@ func (r *LoveNoteRepository) AddNotes(ctx context.Context, notes []string) error
 			continue
 		}
 
-		if _, err := stmt.ExecContext(ctx, trimmed, "default"); err != nil {
+		if _, err := stmt.ExecContext(ctx, trimmed, tag); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("insert love note: %w", err)
 		}
@@ -66,23 +84,32 @@ func (r *LoveNoteRepository) AddNotes(ctx context.Context, notes []string) error
 	return nil
 }
 
-func (r *LoveNoteRepository) RandomNoteText(ctx context.Context) (string, error) {
+func (r *LoveNoteRepository) RandomNote(ctx context.Context) (LoveNote, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT text
+		SELECT id, text, tag, telegram_file_id, telegram_file_unique_id, created_at
 		FROM love_notes
 		ORDER BY RANDOM()
 		LIMIT 1
 	`)
 
-	var text string
-	if err := row.Scan(&text); err != nil {
+	var (
+		note               LoveNote
+		tag                sql.NullString
+		telegramFileID     sql.NullString
+		telegramFileUnique sql.NullString
+	)
+	if err := row.Scan(&note.ID, &note.Text, &tag, &telegramFileID, &telegramFileUnique, &note.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", nil
+			return LoveNote{}, nil
 		}
-		return "", fmt.Errorf("query random love note: %w", err)
+		return LoveNote{}, fmt.Errorf("query random love note: %w", err)
 	}
 
-	return text, nil
+	note.Tag = nullStringValue(tag)
+	note.TelegramFileID = nullStringValue(telegramFileID)
+	note.TelegramFileUnique = nullStringValue(telegramFileUnique)
+
+	return note, nil
 }
 
 func (r *LoveNoteRepository) countNotes(ctx context.Context) (int, error) {
@@ -97,4 +124,20 @@ func (r *LoveNoteRepository) countNotes(ctx context.Context) (int, error) {
 	}
 
 	return count, nil
+}
+
+func nullableString(value string) any {
+	if value == "" {
+		return nil
+	}
+
+	return value
+}
+
+func nullStringValue(value sql.NullString) string {
+	if !value.Valid {
+		return ""
+	}
+
+	return value.String
 }

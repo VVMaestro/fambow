@@ -2,17 +2,34 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
+
+	"fambow/internal/repository"
 )
 
+var ErrLoveNoteContentEmpty = errors.New("love note content cannot be empty")
+
+type LoveNote struct {
+	Text               string
+	TelegramFileID     string
+	TelegramFileUnique string
+}
+
+type LoveNoteInput struct {
+	Text               string
+	TelegramFileID     string
+	TelegramFileUnique string
+}
+
 type LoveNoteStore interface {
-	AddNotes(ctx context.Context, notes []string) error
-	RandomNoteText(ctx context.Context) (string, error)
 	AddDefaultNotes(ctx context.Context, notes []string) error
+	AddLoveNote(ctx context.Context, note repository.LoveNote) error
+	RandomNote(ctx context.Context) (repository.LoveNote, error)
 }
 
 type LoveNoteService struct {
@@ -46,41 +63,54 @@ func (s *LoveNoteService) SeedDefaults(ctx context.Context) error {
 	return s.store.AddDefaultNotes(ctx, s.defaultNotes)
 }
 
-func (s *LoveNoteService) AddLoveNote(ctx context.Context, note string) error {
+func (s *LoveNoteService) AddLoveNote(ctx context.Context, input LoveNoteInput) error {
 	if s.store == nil {
 		return nil
 	}
 
-	notes := []string{note}
+	input.Text = strings.TrimSpace(input.Text)
+	input.TelegramFileID = strings.TrimSpace(input.TelegramFileID)
+	input.TelegramFileUnique = strings.TrimSpace(input.TelegramFileUnique)
+	if input.Text == "" && input.TelegramFileID == "" {
+		return ErrLoveNoteContentEmpty
+	}
 
-	return s.store.AddNotes(ctx, notes)
+	return s.store.AddLoveNote(ctx, repository.LoveNote{
+		Text:               input.Text,
+		TelegramFileID:     input.TelegramFileID,
+		TelegramFileUnique: input.TelegramFileUnique,
+	})
 }
 
-func (s *LoveNoteService) RandomNote(ctx context.Context, firstName string) (string, error) {
+func (s *LoveNoteService) RandomNote(ctx context.Context, firstName string) (LoveNote, error) {
 	name := strings.TrimSpace(firstName)
 	if name == "" {
 		name = "my love"
 	}
 
-	noteTemplate := ""
+	note := LoveNote{}
 	if s.store != nil {
-		storedText, err := s.store.RandomNoteText(ctx)
-
+		storedNote, err := s.store.RandomNote(ctx)
 		if err != nil {
-			return "", err
+			return LoveNote{}, err
 		}
-		noteTemplate = strings.TrimSpace(storedText)
+
+		note.Text = strings.TrimSpace(storedNote.Text)
+		note.TelegramFileID = strings.TrimSpace(storedNote.TelegramFileID)
+		note.TelegramFileUnique = strings.TrimSpace(storedNote.TelegramFileUnique)
 	}
 
-	if noteTemplate == "" {
-		noteTemplate = s.randomDefaultTemplate()
+	if note.Text == "" && note.TelegramFileID == "" {
+		note.Text = s.randomDefaultTemplate()
 	}
 
-	if noteTemplate == "" {
-		return fmt.Sprintf("You are loved so much, %s.", name), nil
+	if note.Text == "" && note.TelegramFileID == "" {
+		note.Text = fmt.Sprintf("You are loved so much, %s.", name)
+		return note, nil
 	}
 
-	return fmt.Sprintf(noteTemplate, name), nil
+	note.Text = formatLoveNoteText(note.Text, name)
+	return note, nil
 }
 
 func (s *LoveNoteService) randomDefaultTemplate() string {
@@ -93,4 +123,16 @@ func (s *LoveNoteService) randomDefaultTemplate() string {
 	s.mu.Unlock()
 
 	return s.defaultNotes[idx]
+}
+
+func formatLoveNoteText(template string, name string) string {
+	if template == "" {
+		return ""
+	}
+
+	if strings.Contains(template, "%s") {
+		return fmt.Sprintf(template, name)
+	}
+
+	return template
 }

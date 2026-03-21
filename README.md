@@ -50,6 +50,8 @@ docker compose up --build -d
 - `/start` - warm welcome
 - `/help` - command list
 - `/love` - instant love note
+- `/add_love <text>` - save a text love note
+- photo with caption `/add_love <text optional>` - save a photo love note
 - `/start` and `/help` show quick keyboard buttons `Love Note`, `Memory`, `Memories`, `Surprise Memory`, and `Reminder`
 - `Memory` button flow: tap `Memory`, then send your next text or photo with optional caption to save
 - `Reminder` button flow: tap `Reminder` to walk through choosing target, cadence, and reminder text without typing the whole command
@@ -80,6 +82,7 @@ docker compose up --build -d
 - Uses SQLite file database (default `fambow.db`)
 - Applies all `.sql` files from `migrations/` on startup in filename order
 - Seeds default love notes into `love_notes` table when empty
+- Love notes can optionally store Telegram photo file IDs for photo note delivery
 - Scheduler checks every minute and dispatches due reminders/events
 
 ## Project Structure

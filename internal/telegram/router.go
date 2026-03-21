@@ -16,8 +16,8 @@ type BotRunner interface {
 }
 
 type LoveNoteProvider interface {
-	RandomNote(ctx context.Context, firstName string) (string, error)
-	AddLoveNote(ctx context.Context, note string) error
+	RandomNote(ctx context.Context, firstName string) (service.LoveNote, error)
+	AddLoveNote(ctx context.Context, input service.LoveNoteInput) error
 }
 
 type MemoryProvider interface {

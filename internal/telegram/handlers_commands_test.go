@@ -29,6 +29,9 @@ func TestStartAndHelpHandlersIncludeShortcuts(t *testing.T) {
 	if !strings.Contains(start.Fields["text"], "Event, or Events") {
 		t.Fatalf("expected /start text to mention Event and Events, got %q", start.Fields["text"])
 	}
+	if !strings.Contains(start.Fields["text"], "photo caption `/add_love`") {
+		t.Fatalf("expected /start text to mention photo love notes, got %q", start.Fields["text"])
+	}
 
 	startKeyboard := parseReplyKeyboardMarkup(t, start.Fields["reply_markup"])
 	if !replyKeyboardContains(startKeyboard, "My Reminders") {
@@ -48,6 +51,9 @@ func TestStartAndHelpHandlersIncludeShortcuts(t *testing.T) {
 	if !strings.Contains(help.Fields["text"], "/reminders - list active reminders") {
 		t.Fatalf("expected /help text to mention /reminders, got %q", help.Fields["text"])
 	}
+	if !strings.Contains(help.Fields["text"], "Photo shortcut: send a photo with caption /add_love <optional note>") {
+		t.Fatalf("expected /help text to mention photo /add_love shortcut, got %q", help.Fields["text"])
+	}
 
 	helpKeyboard := parseReplyKeyboardMarkup(t, help.Fields["reply_markup"])
 	if !replyKeyboardContains(helpKeyboard, "My Reminders") {
@@ -60,7 +66,7 @@ func TestStartAndHelpHandlersIncludeShortcuts(t *testing.T) {
 
 func TestLoveCommands(t *testing.T) {
 	t.Run("love uses provider result", func(t *testing.T) {
-		loveNotes := &loveNoteProviderSpy{randomResult: "Hey Anna, you are magic."}
+		loveNotes := &loveNoteProviderSpy{randomResult: service.LoveNote{Text: "Hey Anna, you are magic."}}
 		harness := newTestBotHarness(t, testBotDeps{
 			loveNotes:           loveNotes,
 			adminTelegramUserID: 1,
@@ -105,13 +111,121 @@ func TestLoveCommands(t *testing.T) {
 
 		processUpdate(t, harness, newTextUpdate(1, 100, "/add_love You are sunshine"))
 
-		if loveNotes.addedNote != "You are sunshine" {
-			t.Fatalf("expected stored love note, got %q", loveNotes.addedNote)
+		if loveNotes.addedNote.Text != "You are sunshine" {
+			t.Fatalf("expected stored love note, got %#v", loveNotes.addedNote)
 		}
 
 		request := harness.client.lastRequest("sendMessage")
 		if request.Fields["text"] != "Love note added successfully!" {
 			t.Fatalf("unexpected /add_love response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("add_love photo stores largest photo and optional text", func(t *testing.T) {
+		loveNotes := &loveNoteProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			loveNotes:           loveNotes,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newPhotoUpdate(1, 100, "/add_love You are sunshine", []models.PhotoSize{
+			{FileID: "small", FileUniqueID: "small-uniq", FileSize: 10},
+			{FileID: "large", FileUniqueID: "large-uniq", FileSize: 20},
+		}))
+
+		if loveNotes.addedNote.Text != "You are sunshine" {
+			t.Fatalf("expected stored photo note text, got %#v", loveNotes.addedNote)
+		}
+		if loveNotes.addedNote.TelegramFileID != "large" {
+			t.Fatalf("expected largest photo id, got %#v", loveNotes.addedNote)
+		}
+		if loveNotes.addedNote.TelegramFileUnique != "large-uniq" {
+			t.Fatalf("expected largest photo unique id, got %#v", loveNotes.addedNote)
+		}
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Love note added successfully!" {
+			t.Fatalf("unexpected /add_love photo response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("add_love photo returns retry when photo cannot be read", func(t *testing.T) {
+		loveNotes := &loveNoteProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			loveNotes:           loveNotes,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newPhotoUpdate(1, 100, "/add_love My favorite", []models.PhotoSize{
+			{FileID: "", FileUniqueID: "", FileSize: 10},
+		}))
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "I could not read the attached photo. Please try sending it again." {
+			t.Fatalf("unexpected unreadable photo response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("love sends photo with caption when note has image", func(t *testing.T) {
+		loveNotes := &loveNoteProviderSpy{randomResult: service.LoveNote{
+			Text:           "Photo day",
+			TelegramFileID: "photo-123",
+		}}
+		harness := newTestBotHarness(t, testBotDeps{
+			loveNotes:           loveNotes,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/love"))
+
+		request := harness.client.lastRequest("sendPhoto")
+		if request.Fields["caption"] != "Photo day" {
+			t.Fatalf("unexpected /love photo caption: %#v", request)
+		}
+		keyboard := parseReplyKeyboardMarkup(t, request.Fields["reply_markup"])
+		if !replyKeyboardContains(keyboard, "My Reminders") {
+			t.Fatal("expected /love photo keyboard to include My Reminders")
+		}
+	})
+
+	t.Run("love sends photo without caption for photo-only note", func(t *testing.T) {
+		loveNotes := &loveNoteProviderSpy{randomResult: service.LoveNote{
+			TelegramFileID: "photo-456",
+		}}
+		harness := newTestBotHarness(t, testBotDeps{
+			loveNotes:           loveNotes,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/love"))
+
+		request := harness.client.lastRequest("sendPhoto")
+		if request.Fields["caption"] != "" {
+			t.Fatalf("expected empty photo caption, got %#v", request)
+		}
+	})
+
+	t.Run("love falls back to photo then text when caption is too long", func(t *testing.T) {
+		loveNotes := &loveNoteProviderSpy{randomResult: service.LoveNote{
+			Text:           strings.Repeat("a", telegramPhotoCaptionLimit+1),
+			TelegramFileID: "photo-long",
+		}}
+		harness := newTestBotHarness(t, testBotDeps{
+			loveNotes:           loveNotes,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/love"))
+
+		requests := harness.client.allRequests()
+		if len(requests) != 2 {
+			t.Fatalf("expected photo and text fallback, got %#v", requests)
+		}
+		if requests[0].Method != "sendPhoto" || requests[0].Fields["caption"] != "" {
+			t.Fatalf("unexpected fallback photo request: %#v", requests[0])
+		}
+		if requests[1].Method != "sendMessage" || requests[1].Fields["text"] != strings.Repeat("a", telegramPhotoCaptionLimit+1) {
+			t.Fatalf("unexpected fallback text request: %#v", requests[1])
 		}
 	})
 }

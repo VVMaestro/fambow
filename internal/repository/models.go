@@ -29,10 +29,12 @@ type Memory struct {
 }
 
 type LoveNote struct {
-	ID        int64
-	Text      string
-	Tag       string
-	CreatedAt time.Time
+	ID                 int64
+	Text               string
+	Tag                string
+	TelegramFileID     string
+	TelegramFileUnique string
+	CreatedAt          time.Time
 }
 
 type Event struct {

@@ -297,18 +297,18 @@ func inlineKeyboardContains(markup models.InlineKeyboardMarkup, label string) bo
 
 type loveNoteProviderSpy struct {
 	randomFirstName string
-	randomResult    string
+	randomResult    service.LoveNote
 	randomErr       error
-	addedNote       string
+	addedNote       service.LoveNoteInput
 	addErr          error
 }
 
-func (s *loveNoteProviderSpy) RandomNote(_ context.Context, firstName string) (string, error) {
+func (s *loveNoteProviderSpy) RandomNote(_ context.Context, firstName string) (service.LoveNote, error) {
 	s.randomFirstName = firstName
 	return s.randomResult, s.randomErr
 }
 
-func (s *loveNoteProviderSpy) AddLoveNote(_ context.Context, note string) error {
+func (s *loveNoteProviderSpy) AddLoveNote(_ context.Context, note service.LoveNoteInput) error {
 	s.addedNote = note
 	return s.addErr
 }
