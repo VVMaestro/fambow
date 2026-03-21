@@ -12,6 +12,7 @@ var ErrUserTelegramIDInvalid = errors.New("invalid telegram user id")
 var ErrUserFirstNameEmpty = errors.New("user first name cannot be empty")
 var ErrUserTypeInvalid = errors.New("invalid user type")
 var ErrUserAlreadyExists = errors.New("user already exists")
+var ErrUserNotFound = errors.New("user not found")
 
 type User struct {
 	TelegramUserID int64
@@ -22,6 +23,7 @@ type User struct {
 type UserStore interface {
 	ExistsByTelegramUserID(ctx context.Context, telegramUserID int64) (bool, error)
 	CreateUser(ctx context.Context, telegramUserID int64, firstName string, userType string) (repository.User, error)
+	FindByTelegramUserID(ctx context.Context, telegramUserID int64) (repository.User, error)
 }
 
 type UserService struct {
@@ -59,6 +61,26 @@ func (s *UserService) CreateUser(ctx context.Context, telegramUserID int64, firs
 	if err != nil {
 		if errors.Is(err, repository.ErrUserAlreadyExists) {
 			return User{}, ErrUserAlreadyExists
+		}
+		return User{}, err
+	}
+
+	return User{
+		TelegramUserID: record.TelegramUserID,
+		FirstName:      record.FirstName,
+		Type:           record.Type,
+	}, nil
+}
+
+func (s *UserService) GetUser(ctx context.Context, telegramUserID int64) (User, error) {
+	if telegramUserID <= 0 {
+		return User{}, ErrUserTelegramIDInvalid
+	}
+
+	record, err := s.store.FindByTelegramUserID(ctx, telegramUserID)
+	if err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			return User{}, ErrUserNotFound
 		}
 		return User{}, err
 	}

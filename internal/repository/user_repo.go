@@ -68,6 +68,25 @@ func (r *UserRepository) CreateUser(ctx context.Context, telegramUserID int64, f
 	return user, nil
 }
 
+func (r *UserRepository) FindByTelegramUserID(ctx context.Context, telegramUserID int64) (User, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, telegram_user_id, first_name, type, created_at
+		FROM users
+		WHERE telegram_user_id = ?
+		LIMIT 1
+	`, telegramUserID)
+
+	var user User
+	if err := row.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.Type, &user.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return User{}, ErrUserNotFound
+		}
+		return User{}, fmt.Errorf("find user by telegram id: %w", err)
+	}
+
+	return user, nil
+}
+
 func userIDByTelegramUserID(ctx context.Context, db *sql.DB, telegramUserID int64) (int64, error) {
 	row := db.QueryRowContext(ctx, `
 		SELECT id

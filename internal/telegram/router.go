@@ -40,6 +40,7 @@ type CelebrationProvider interface {
 type UserProvider interface {
 	IsRegistered(ctx context.Context, telegramUserID int64) (bool, error)
 	CreateUser(ctx context.Context, telegramUserID int64, firstName string, userType string) (service.User, error)
+	GetUser(ctx context.Context, telegramUserID int64) (service.User, error)
 }
 
 func NewBot(token string, logger *slog.Logger, loveNotes LoveNoteProvider, memories MemoryProvider, reminders ReminderProvider, celebrations CelebrationProvider, users UserProvider, adminTelegramUserID int64) (*bot.Bot, error) {
@@ -49,7 +50,8 @@ func NewBot(token string, logger *slog.Logger, loveNotes LoveNoteProvider, memor
 	}
 
 	memoryIntake := newMemoryIntakeState()
-	registerCoreHandlers(b, logger, loveNotes, memories, reminders, celebrations, users, adminTelegramUserID, memoryIntake)
+	reminderWizard := newReminderWizardState()
+	registerCoreHandlers(b, logger, loveNotes, memories, reminders, celebrations, users, adminTelegramUserID, memoryIntake, reminderWizard)
 	registerMenuCommands(context.Background(), b, logger)
 	return b, nil
 }
