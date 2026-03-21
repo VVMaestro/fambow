@@ -46,7 +46,7 @@ func (r *CelebrationRepository) SaveEvent(ctx context.Context, telegramUserID in
 	}
 
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, user_id, title, event_date, remind_days_before
+		SELECT id, user_id, title, date(event_date), remind_days_before
 		FROM events
 		WHERE id = ?
 	`, eventID)
@@ -68,7 +68,7 @@ func (r *CelebrationRepository) SaveEvent(ctx context.Context, telegramUserID in
 
 func (r *CelebrationRepository) ListEventsByTelegramUser(ctx context.Context, telegramUserID int64) ([]Event, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT e.id, e.user_id, e.title, e.event_date, e.remind_days_before
+		SELECT e.id, e.user_id, e.title, date(e.event_date), e.remind_days_before
 		FROM events e
 		JOIN users u ON u.id = e.user_id
 		WHERE u.telegram_user_id = ?
@@ -109,7 +109,7 @@ func (r *CelebrationRepository) ListDueEventReminders(ctx context.Context, dispa
 			u.telegram_user_id,
 			u.first_name,
 			e.title,
-			e.event_date,
+			date(e.event_date),
 			CAST(julianday(e.event_date) - julianday(?) AS INTEGER) AS days_until_event,
 			e.remind_days_before
 		FROM events e
