@@ -13,7 +13,7 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-func registerCoreHandlers(b *bot.Bot, logger *slog.Logger, loveNotes LoveNoteProvider, memories MemoryProvider, reminders ReminderProvider, celebrations CelebrationProvider, users UserProvider, adminTelegramUserID int64, memoryWizard *memoryWizardState, reminderWizard *reminderWizardState) {
+func registerCoreHandlers(b *bot.Bot, logger *slog.Logger, loveNotes LoveNoteProvider, memories MemoryProvider, reminders ReminderProvider, celebrations CelebrationProvider, users UserProvider, adminTelegramUserID int64, memoryWizard *memoryWizardState, reminderWizard *reminderWizardState, eventWizard *eventWizardState) {
 	guard := accessGuard(logger, users, adminTelegramUserID)
 
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/start", bot.MatchTypeExact, guard(startHandler(logger)))
@@ -25,6 +25,8 @@ func registerCoreHandlers(b *bot.Bot, logger *slog.Logger, loveNotes LoveNotePro
 	b.RegisterHandler(bot.HandlerTypeMessageText, "Surprise Memory", bot.MatchTypeExact, guard(surpriseMemoryHandler(logger, memories)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "Reminder", bot.MatchTypeExact, guard(reminderWizardStartHandler(logger, reminders, reminderWizard, users)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "My Reminders", bot.MatchTypeExact, guard(remindersHandler(logger, reminders)))
+	b.RegisterHandler(bot.HandlerTypeMessageText, "Event", bot.MatchTypeExact, guard(eventWizardStartHandler(logger, celebrations, eventWizard)))
+	b.RegisterHandler(bot.HandlerTypeMessageText, "Events", bot.MatchTypeExact, guard(eventsHandler(logger, celebrations)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/add_love", bot.MatchTypePrefix, guard(addLoveNoteHandler(logger, loveNotes)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/memory", bot.MatchTypePrefix, guard(memoryHandler(logger, memories, memoryWizard)))
 	b.RegisterHandler(bot.HandlerTypePhotoCaption, "/memory", bot.MatchTypePrefix, guard(memoryPhotoHandler(logger, memories, memoryWizard)))
@@ -34,12 +36,14 @@ func registerCoreHandlers(b *bot.Bot, logger *slog.Logger, loveNotes LoveNotePro
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/reminders", bot.MatchTypeExact, guard(remindersHandler(logger, reminders)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/remind", bot.MatchTypePrefix, guard(remindHandler(logger, reminders)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/events", bot.MatchTypeExact, guard(eventsHandler(logger, celebrations)))
-	b.RegisterHandler(bot.HandlerTypeMessageText, "/event", bot.MatchTypePrefix, guard(eventHandler(logger, celebrations)))
+	b.RegisterHandler(bot.HandlerTypeMessageText, "/event", bot.MatchTypePrefix, guard(eventHandler(logger, celebrations, eventWizard)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/create_user", bot.MatchTypePrefix, createUserHandler(logger, users, adminTelegramUserID))
 	b.RegisterHandler(bot.HandlerTypeCallbackQueryData, memoryWizardCallbackPrefix, bot.MatchTypePrefix, guard(memoryWizardCallbackHandler(logger, memories, memoryWizard)))
 	b.RegisterHandlerMatchFunc(memoryWizardMatch(memoryWizard), guard(memoryWizardMessageHandler(logger, memories, memoryWizard)))
 	b.RegisterHandler(bot.HandlerTypeCallbackQueryData, reminderWizardCallbackPrefix, bot.MatchTypePrefix, guard(reminderWizardCallbackHandler(logger, reminders, reminderWizard)))
 	b.RegisterHandlerMatchFunc(reminderWizardMatch(reminderWizard), guard(reminderWizardMessageHandler(logger, reminders, reminderWizard)))
+	b.RegisterHandler(bot.HandlerTypeCallbackQueryData, eventWizardCallbackPrefix, bot.MatchTypePrefix, guard(eventWizardCallbackHandler(logger, celebrations, eventWizard)))
+	b.RegisterHandlerMatchFunc(eventWizardMatch(eventWizard), guard(eventWizardMessageHandler(logger, celebrations, eventWizard)))
 }
 
 func startHandler(logger *slog.Logger) bot.HandlerFunc {
@@ -50,7 +54,7 @@ func startHandler(logger *slog.Logger) bot.HandlerFunc {
 
 		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      update.Message.Chat.ID,
-			Text:        "Hi my love! This is your cozy companion bot.\n\nUse /help to see what I can do so far, or tap one of the buttons below for Love Notes, Memories, Reminder, or My Reminders. `/memory` also starts a guided memory flow.",
+			Text:        "Hi my love! This is your cozy companion bot.\n\nUse /help to see what I can do so far, or tap one of the buttons below for Love Notes, Memories, Reminder, My Reminders, Event, or Events. `/memory` and `/event` also start guided flows.",
 			ReplyMarkup: commandKeyboard(),
 		})
 		if err != nil {
@@ -67,7 +71,7 @@ func helpHandler(logger *slog.Logger) bot.HandlerFunc {
 
 		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      update.Message.Chat.ID,
-			Text:        "Available commands:\n/start - welcome message\n/help - command list\n/love - instant love note\n/memory - guided memory creator\nShortcut: /memory <text>\nShortcut: /memory YYYY-MM-DD | <text>\nPhoto shortcut: send a photo with caption /memory <optional note> or /memory YYYY-MM-DD | <optional note>\n/memories - show recent memories\n/surprise_memory - share a random memory\n/reminder - guided reminder creator\n/remind ... - create a reminder via text\n/remind him at HH:MM to ... - reminder for husband\n/remind her at HH:MM to ... - reminder for wife\n/reminders - list active reminders\n/event add ... - add celebration date\n/events - list celebration dates\n/create_user <telegram_id> <first_name> <husband|wife> - admin only\n\nQuick buttons:\nTap Love Note, Memory, Memories, Surprise Memory, Reminder, or My Reminders for shortcuts.",
+			Text:        "Available commands:\n/start - welcome message\n/help - command list\n/love - instant love note\n/memory - guided memory creator\nShortcut: /memory <text>\nShortcut: /memory YYYY-MM-DD | <text>\nPhoto shortcut: send a photo with caption /memory <optional note> or /memory YYYY-MM-DD | <optional note>\n/memories - show recent memories\n/surprise_memory - share a random memory\n/reminder - guided reminder creator\n/remind ... - create a reminder via text\n/remind him at HH:MM to ... - reminder for husband\n/remind her at HH:MM to ... - reminder for wife\n/reminders - list active reminders\n/event - guided celebration creator\nShortcut: /event add YYYY-MM-DD | Title | Days\n/events - list celebration dates\n/create_user <telegram_id> <first_name> <husband|wife> - admin only\n\nQuick buttons:\nTap Love Note, Memory, Memories, Surprise Memory, Reminder, My Reminders, Event, or Events for shortcuts.",
 			ReplyMarkup: commandKeyboard(),
 		})
 		if err != nil {

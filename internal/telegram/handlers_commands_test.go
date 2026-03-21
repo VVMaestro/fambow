@@ -11,7 +11,7 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-func TestStartAndHelpHandlersIncludeMyRemindersShortcut(t *testing.T) {
+func TestStartAndHelpHandlersIncludeShortcuts(t *testing.T) {
 	harness := newTestBotHarness(t, testBotDeps{adminTelegramUserID: 1})
 
 	processUpdate(t, harness, newTextUpdate(1, 100, "/start"))
@@ -23,18 +23,27 @@ func TestStartAndHelpHandlersIncludeMyRemindersShortcut(t *testing.T) {
 	}
 
 	start := requests[0]
-	if !strings.Contains(start.Fields["text"], "Reminder, or My Reminders") {
+	if !strings.Contains(start.Fields["text"], "Reminder, My Reminders") {
 		t.Fatalf("expected /start text to mention My Reminders, got %q", start.Fields["text"])
+	}
+	if !strings.Contains(start.Fields["text"], "Event, or Events") {
+		t.Fatalf("expected /start text to mention Event and Events, got %q", start.Fields["text"])
 	}
 
 	startKeyboard := parseReplyKeyboardMarkup(t, start.Fields["reply_markup"])
 	if !replyKeyboardContains(startKeyboard, "My Reminders") {
 		t.Fatal("expected /start keyboard to include My Reminders")
 	}
+	if !replyKeyboardContains(startKeyboard, "Event") || !replyKeyboardContains(startKeyboard, "Events") {
+		t.Fatal("expected /start keyboard to include Event and Events")
+	}
 
 	help := requests[1]
-	if !strings.Contains(help.Fields["text"], "Reminder, or My Reminders") {
+	if !strings.Contains(help.Fields["text"], "Reminder, My Reminders") {
 		t.Fatalf("expected /help text to mention My Reminders, got %q", help.Fields["text"])
+	}
+	if !strings.Contains(help.Fields["text"], "/event - guided celebration creator") {
+		t.Fatalf("expected /help text to mention guided /event, got %q", help.Fields["text"])
 	}
 	if !strings.Contains(help.Fields["text"], "/reminders - list active reminders") {
 		t.Fatalf("expected /help text to mention /reminders, got %q", help.Fields["text"])
@@ -43,6 +52,9 @@ func TestStartAndHelpHandlersIncludeMyRemindersShortcut(t *testing.T) {
 	helpKeyboard := parseReplyKeyboardMarkup(t, help.Fields["reply_markup"])
 	if !replyKeyboardContains(helpKeyboard, "My Reminders") {
 		t.Fatal("expected /help keyboard to include My Reminders")
+	}
+	if !replyKeyboardContains(helpKeyboard, "Event") || !replyKeyboardContains(helpKeyboard, "Events") {
+		t.Fatal("expected /help keyboard to include Event and Events")
 	}
 }
 
@@ -67,6 +79,9 @@ func TestLoveCommands(t *testing.T) {
 		keyboard := parseReplyKeyboardMarkup(t, request.Fields["reply_markup"])
 		if !replyKeyboardContains(keyboard, "My Reminders") {
 			t.Fatal("expected /love keyboard to include My Reminders")
+		}
+		if !replyKeyboardContains(keyboard, "Event") || !replyKeyboardContains(keyboard, "Events") {
+			t.Fatal("expected /love keyboard to include Event and Events")
 		}
 	})
 
@@ -611,6 +626,68 @@ func TestReminderCommands(t *testing.T) {
 }
 
 func TestEventCommands(t *testing.T) {
+	t.Run("event command starts wizard when empty", func(t *testing.T) {
+		celebrations := &celebrationProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/event"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if !strings.Contains(request.Fields["text"], "Step 1: when is the event?") {
+			t.Fatalf("unexpected /event wizard response: %q", request.Fields["text"])
+		}
+
+		markup := parseInlineKeyboardMarkup(t, request.Fields["reply_markup"])
+		if !inlineKeyboardContains(markup, "Today") || !inlineKeyboardContains(markup, "Tomorrow") || !inlineKeyboardContains(markup, "Custom Date") {
+			t.Fatalf("unexpected event wizard date keyboard: %#v", markup)
+		}
+		if celebrations.addCommand != "" {
+			t.Fatal("expected empty /event not to save immediately")
+		}
+	})
+
+	t.Run("event button starts same wizard", func(t *testing.T) {
+		celebrations := &celebrationProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "Event"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if !strings.Contains(request.Fields["text"], "Step 1: when is the event?") {
+			t.Fatalf("unexpected Event button response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("events button lists celebration dates", func(t *testing.T) {
+		celebrations := &celebrationProviderSpy{
+			listResult: []service.CelebrationEvent{
+				{
+					Title:            "Anniversary dinner",
+					EventDate:        time.Date(2026, time.September, 12, 0, 0, 0, 0, time.Local),
+					RemindDaysBefore: 3,
+				},
+			},
+		}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "Events"))
+
+		request := harness.client.lastRequest("sendMessage")
+		expected := "Your celebration dates:\n- Anniversary dinner on 2026-09-12 (remind 3 day(s) before)"
+		if request.Fields["text"] != expected {
+			t.Fatalf("unexpected Events button response: %q", request.Fields["text"])
+		}
+	})
+
 	t.Run("event saves celebration", func(t *testing.T) {
 		celebrations := &celebrationProviderSpy{
 			addResult: service.CelebrationEvent{
@@ -636,6 +713,173 @@ func TestEventCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("event wizard saves using today shortcut", func(t *testing.T) {
+		today := time.Now().Local().Format("2006-01-02")
+		celebrations := &celebrationProviderSpy{
+			addResult: service.CelebrationEvent{
+				Title:            "Anniversary dinner",
+				EventDate:        time.Now().Local(),
+				RemindDaysBefore: 3,
+			},
+		}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/event"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"date:today"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "Anniversary dinner"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"days:3"))
+
+		expectedCommand := "add " + today + " | Anniversary dinner | 3"
+		if celebrations.addCommand != expectedCommand {
+			t.Fatalf("expected wizard command %q, got %q", expectedCommand, celebrations.addCommand)
+		}
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Event saved: Anniversary dinner on "+time.Now().Local().Format("2006-01-02")+" (remind 3 day(s) before)." {
+			t.Fatalf("unexpected wizard save response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("event wizard saves using tomorrow shortcut", func(t *testing.T) {
+		tomorrow := time.Now().Local().Add(24 * time.Hour)
+		celebrations := &celebrationProviderSpy{
+			addResult: service.CelebrationEvent{
+				Title:            "Flowers day",
+				EventDate:        tomorrow,
+				RemindDaysBefore: 1,
+			},
+		}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/event"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"date:tomorrow"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "Flowers day"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"days:1"))
+
+		expectedCommand := "add " + tomorrow.Format("2006-01-02") + " | Flowers day | 1"
+		if celebrations.addCommand != expectedCommand {
+			t.Fatalf("expected tomorrow command %q, got %q", expectedCommand, celebrations.addCommand)
+		}
+	})
+
+	t.Run("event wizard retries invalid and past custom date", func(t *testing.T) {
+		futureDate := time.Now().Local().Add(72 * time.Hour)
+		celebrations := &celebrationProviderSpy{
+			addResult: service.CelebrationEvent{
+				Title:            "Trip anniversary",
+				EventDate:        futureDate,
+				RemindDaysBefore: 7,
+			},
+		}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/event"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"date:custom"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "2026-99-99"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Send the date as YYYY-MM-DD. Example: 2026-09-12" {
+			t.Fatalf("unexpected invalid custom date response: %q", request.Fields["text"])
+		}
+
+		pastDate := time.Now().Local().Add(-24 * time.Hour).Format("2006-01-02")
+		processUpdate(t, harness, newTextUpdate(1, 100, pastDate))
+
+		request = harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "That date is in the past. Send today or a future date." {
+			t.Fatalf("unexpected past custom date response: %q", request.Fields["text"])
+		}
+
+		processUpdate(t, harness, newTextUpdate(1, 100, futureDate.Format("2006-01-02")))
+		processUpdate(t, harness, newTextUpdate(1, 100, "Trip anniversary"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"days:7"))
+
+		expectedCommand := "add " + futureDate.Format("2006-01-02") + " | Trip anniversary | 7"
+		if celebrations.addCommand != expectedCommand {
+			t.Fatalf("expected custom date command %q, got %q", expectedCommand, celebrations.addCommand)
+		}
+	})
+
+	t.Run("event wizard rejects empty title and allows retry", func(t *testing.T) {
+		celebrations := &celebrationProviderSpy{
+			addResult: service.CelebrationEvent{
+				Title:            "Date night",
+				EventDate:        time.Now().Local(),
+				RemindDaysBefore: 1,
+			},
+		}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/event"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"date:today"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "   "))
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Event title cannot be empty. Send a short title." {
+			t.Fatalf("unexpected empty title response: %q", request.Fields["text"])
+		}
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "Date night"))
+
+		request = harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Step 3: how many days before should I remind you?" {
+			t.Fatalf("unexpected title retry response: %q", request.Fields["text"])
+		}
+
+		markup := parseInlineKeyboardMarkup(t, request.Fields["reply_markup"])
+		if !inlineKeyboardContains(markup, "Type Number") {
+			t.Fatalf("unexpected event days keyboard: %#v", markup)
+		}
+	})
+
+	t.Run("event wizard accepts manual reminder days after retry", func(t *testing.T) {
+		celebrations := &celebrationProviderSpy{
+			addResult: service.CelebrationEvent{
+				Title:            "Concert",
+				EventDate:        time.Now().Local(),
+				RemindDaysBefore: 5,
+			},
+		}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/event"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"date:today"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "Concert"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"days:manual"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "0"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Send a positive number of days. Example: 3" {
+			t.Fatalf("unexpected invalid manual days response: %q", request.Fields["text"])
+		}
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "5"))
+
+		if !strings.HasSuffix(celebrations.addCommand, "| 5") {
+			t.Fatalf("expected manual days to be saved, got %q", celebrations.addCommand)
+		}
+
+		request = harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Event saved: Concert on "+time.Now().Local().Format("2006-01-02")+" (remind 5 day(s) before)." {
+			t.Fatalf("unexpected manual days save response: %q", request.Fields["text"])
+		}
+	})
+
 	t.Run("event returns usage for invalid payload", func(t *testing.T) {
 		celebrations := &celebrationProviderSpy{addErr: service.ErrEventInvalidFormat}
 		harness := newTestBotHarness(t, testBotDeps{
@@ -651,6 +895,73 @@ func TestEventCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("event wizard callback cancel clears flow", func(t *testing.T) {
+		celebrations := &celebrationProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/event"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"cancel"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Event flow canceled." {
+			t.Fatalf("unexpected callback cancel response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("event wizard text cancel clears flow", func(t *testing.T) {
+		celebrations := &celebrationProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/event"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"date:custom"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "/cancel"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Event flow canceled." {
+			t.Fatalf("unexpected text cancel response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("event wizard ignores unrelated commands", func(t *testing.T) {
+		celebrations := &celebrationProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/event"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "/help"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if !strings.Contains(request.Fields["text"], "Available commands:") {
+			t.Fatalf("expected /help to handle command during event wizard, got %q", request.Fields["text"])
+		}
+		if celebrations.addCommand != "" {
+			t.Fatal("expected unrelated command not to save event")
+		}
+	})
+
+	t.Run("event wizard expired callback asks user to restart", func(t *testing.T) {
+		celebrations := &celebrationProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"date:today"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "Event flow expired. Send /event to start again." {
+			t.Fatalf("unexpected expired callback response: %q", request.Fields["text"])
+		}
+	})
+
 	t.Run("event returns generic save failure", func(t *testing.T) {
 		celebrations := &celebrationProviderSpy{addErr: errors.New("boom")}
 		harness := newTestBotHarness(t, testBotDeps{
@@ -663,6 +974,24 @@ func TestEventCommands(t *testing.T) {
 		request := harness.client.lastRequest("sendMessage")
 		if request.Fields["text"] != "I could not save your event right now. Please try again in a moment." {
 			t.Fatalf("unexpected /event generic failure response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("event wizard returns generic save failure", func(t *testing.T) {
+		celebrations := &celebrationProviderSpy{addErr: errors.New("boom")}
+		harness := newTestBotHarness(t, testBotDeps{
+			celebrations:        celebrations,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/event"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"date:today"))
+		processUpdate(t, harness, newTextUpdate(1, 100, "Anniversary dinner"))
+		processUpdate(t, harness, newCallbackUpdate(1, 100, eventWizardCallbackPrefix+"days:3"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "I could not save your event right now. Please try again in a moment." {
+			t.Fatalf("unexpected wizard generic failure response: %q", request.Fields["text"])
 		}
 	})
 

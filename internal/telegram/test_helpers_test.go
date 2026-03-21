@@ -186,6 +186,7 @@ func newTestBotHarness(t *testing.T, deps testBotDeps) *testBotHarness {
 		deps.adminTelegramUserID,
 		newMemoryWizardState(),
 		newReminderWizardState(),
+		newEventWizardState(),
 	)
 	if deps.registerMenuCommands {
 		registerMenuCommands(context.Background(), b, testLogger())

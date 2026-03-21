@@ -51,7 +51,8 @@ func NewBot(token string, logger *slog.Logger, loveNotes LoveNoteProvider, memor
 
 	memoryWizard := newMemoryWizardState()
 	reminderWizard := newReminderWizardState()
-	registerCoreHandlers(b, logger, loveNotes, memories, reminders, celebrations, users, adminTelegramUserID, memoryWizard, reminderWizard)
+	eventWizard := newEventWizardState()
+	registerCoreHandlers(b, logger, loveNotes, memories, reminders, celebrations, users, adminTelegramUserID, memoryWizard, reminderWizard, eventWizard)
 	registerMenuCommands(context.Background(), b, logger)
 	return b, nil
 }
