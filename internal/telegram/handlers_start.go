@@ -24,6 +24,7 @@ func registerCoreHandlers(b *bot.Bot, logger *slog.Logger, loveNotes LoveNotePro
 	b.RegisterHandler(bot.HandlerTypeMessageText, "Memories", bot.MatchTypeExact, guard(memoriesHandler(logger, memories)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "Surprise Memory", bot.MatchTypeExact, guard(surpriseMemoryHandler(logger, memories)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "Reminder", bot.MatchTypeExact, guard(reminderWizardStartHandler(logger, reminders, reminderWizard, users)))
+	b.RegisterHandler(bot.HandlerTypeMessageText, "My Reminders", bot.MatchTypeExact, guard(remindersHandler(logger, reminders)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/add_love", bot.MatchTypePrefix, guard(addLoveNoteHandler(logger, loveNotes)))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/memory", bot.MatchTypePrefix, guard(memoryHandler(logger, memories, memoryIntake)))
 	b.RegisterHandler(bot.HandlerTypePhotoCaption, "/memory", bot.MatchTypePrefix, guard(memoryPhotoHandler(logger, memories, memoryIntake)))
@@ -48,7 +49,7 @@ func startHandler(logger *slog.Logger) bot.HandlerFunc {
 
 		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      update.Message.Chat.ID,
-			Text:        "Hi my love! This is your cozy companion bot.\n\nUse /help to see what I can do so far, or tap one of the buttons below for Love Notes, Memories, or Reminders.",
+			Text:        "Hi my love! This is your cozy companion bot.\n\nUse /help to see what I can do so far, or tap one of the buttons below for Love Notes, Memories, Reminder, or My Reminders.",
 			ReplyMarkup: commandKeyboard(),
 		})
 		if err != nil {
@@ -65,7 +66,7 @@ func helpHandler(logger *slog.Logger) bot.HandlerFunc {
 
 		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      update.Message.Chat.ID,
-			Text:        "Available commands:\n/start - welcome message\n/help - command list\n/love - instant love note\n/memory <text> - save a sweet memory\n/memory YYYY-MM-DD | <text> - save memory with custom date\n/memory photo with caption - save a memory with photo\n/memories - show recent memories\n/surprise_memory - share a random memory\n/reminder - guided reminder creator\n/remind ... - create a reminder via text\n/remind him at HH:MM to ... - reminder for husband\n/remind her at HH:MM to ... - reminder for wife\n/reminders - list active reminders\n/event add ... - add celebration date\n/events - list celebration dates\n/create_user <telegram_id> <first_name> <husband|wife> - admin only\n\nQuick buttons:\nTap Love Note, Memory, Memories, Surprise Memory, or Reminder for shortcuts.",
+			Text:        "Available commands:\n/start - welcome message\n/help - command list\n/love - instant love note\n/memory <text> - save a sweet memory\n/memory YYYY-MM-DD | <text> - save memory with custom date\n/memory photo with caption - save a memory with photo\n/memories - show recent memories\n/surprise_memory - share a random memory\n/reminder - guided reminder creator\n/remind ... - create a reminder via text\n/remind him at HH:MM to ... - reminder for husband\n/remind her at HH:MM to ... - reminder for wife\n/reminders - list active reminders\n/event add ... - add celebration date\n/events - list celebration dates\n/create_user <telegram_id> <first_name> <husband|wife> - admin only\n\nQuick buttons:\nTap Love Note, Memory, Memories, Surprise Memory, Reminder, or My Reminders for shortcuts.",
 			ReplyMarkup: commandKeyboard(),
 		})
 		if err != nil {

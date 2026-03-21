@@ -15,6 +15,7 @@ func commandKeyboard() *models.ReplyKeyboardMarkup {
 			},
 			{
 				{Text: "Reminder"},
+				{Text: "My Reminders"},
 			},
 		},
 		ResizeKeyboard: true,
