@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"fambow/internal/service"
+	"fambow/internal/telegram"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -16,6 +17,16 @@ import (
 
 type MessageSender interface {
 	SendMessage(ctx context.Context, params *bot.SendMessageParams) (*models.Message, error)
+	SendPhoto(ctx context.Context, params *bot.SendPhotoParams) (*models.Message, error)
+}
+
+type LoveNoteSchedulerService interface {
+	DueLoveNoteSchedules(ctx context.Context, now time.Time) ([]service.PendingLoveNoteSchedule, error)
+	MarkLoveNoteScheduleDispatched(ctx context.Context, scheduleID int64, now time.Time) error
+}
+
+type LoveNoteProvider interface {
+	RandomNote(ctx context.Context, firstName string) (service.LoveNote, error)
 }
 
 type ReminderSchedulerService interface {
@@ -29,22 +40,26 @@ type CelebrationSchedulerService interface {
 }
 
 type CronScheduler struct {
-	logger       *slog.Logger
-	sender       MessageSender
-	reminders    ReminderSchedulerService
-	celebrations CelebrationSchedulerService
-	cron         *cron.Cron
+	logger        *slog.Logger
+	sender        MessageSender
+	loveNotes     LoveNoteProvider
+	loveSchedules LoveNoteSchedulerService
+	reminders     ReminderSchedulerService
+	celebrations  CelebrationSchedulerService
+	cron          *cron.Cron
 }
 
-func NewCronScheduler(logger *slog.Logger, sender MessageSender, reminders ReminderSchedulerService, celebrations CelebrationSchedulerService) (*CronScheduler, error) {
+func NewCronScheduler(logger *slog.Logger, sender MessageSender, loveNotes LoveNoteProvider, loveSchedules LoveNoteSchedulerService, reminders ReminderSchedulerService, celebrations CelebrationSchedulerService) (*CronScheduler, error) {
 	c := cron.New(cron.WithChain(cron.SkipIfStillRunning(cron.DefaultLogger)))
 
 	scheduler := &CronScheduler{
-		logger:       logger,
-		sender:       sender,
-		reminders:    reminders,
-		celebrations: celebrations,
-		cron:         c,
+		logger:        logger,
+		sender:        sender,
+		loveNotes:     loveNotes,
+		loveSchedules: loveSchedules,
+		reminders:     reminders,
+		celebrations:  celebrations,
+		cron:          c,
 	}
 
 	if _, err := c.AddFunc("@every 1m", scheduler.runTick); err != nil {
@@ -74,8 +89,37 @@ func (s *CronScheduler) runTick() {
 	defer cancel()
 
 	now := time.Now()
+	s.dispatchLoveNoteSchedules(ctx, now)
 	s.dispatchReminders(ctx, now)
 	s.dispatchCelebrations(ctx, now)
+}
+
+func (s *CronScheduler) dispatchLoveNoteSchedules(ctx context.Context, now time.Time) {
+	if s.loveSchedules == nil || s.loveNotes == nil || s.sender == nil {
+		return
+	}
+
+	items, err := s.loveSchedules.DueLoveNoteSchedules(ctx, now)
+	if err != nil {
+		s.logger.Error("failed loading due love note schedules", "error", err)
+		return
+	}
+
+	for _, item := range items {
+		note, err := s.loveNotes.RandomNote(ctx, item.FirstName)
+		if err != nil {
+			s.logger.Error("failed fetching scheduled love note", "schedule_id", item.ID, "chat_id", item.TelegramUserID, "error", err)
+			continue
+		}
+
+		if !telegram.SendLoveNote(ctx, s.sender, item.TelegramUserID, note, nil, s.logger) {
+			continue
+		}
+
+		if err := s.loveSchedules.MarkLoveNoteScheduleDispatched(ctx, item.ID, now); err != nil {
+			s.logger.Error("failed marking love note schedule dispatched", "schedule_id", item.ID, "error", err)
+		}
+	}
 }
 
 func (s *CronScheduler) dispatchReminders(ctx context.Context, now time.Time) {

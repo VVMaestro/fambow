@@ -14,6 +14,8 @@ type userStoreSpy struct {
 	createType           string
 	createResult         repository.User
 	createErr            error
+	listResult           []repository.User
+	listErr              error
 }
 
 func (s *userStoreSpy) ExistsByTelegramUserID(context.Context, int64) (bool, error) {
@@ -29,6 +31,10 @@ func (s *userStoreSpy) CreateUser(_ context.Context, telegramUserID int64, first
 
 func (s *userStoreSpy) FindByTelegramUserID(context.Context, int64) (repository.User, error) {
 	return repository.User{}, nil
+}
+
+func (s *userStoreSpy) ListUsers(context.Context) ([]repository.User, error) {
+	return s.listResult, s.listErr
 }
 
 func TestUserServiceCreateUserValidation(t *testing.T) {
@@ -87,5 +93,24 @@ func TestUserServiceCreateUserNormalizesInputs(t *testing.T) {
 	}
 	if user.FirstName != "Mia" || user.Type != "wife" {
 		t.Fatalf("unexpected returned user: %#v", user)
+	}
+}
+
+func TestUserServiceListUsers(t *testing.T) {
+	store := &userStoreSpy{
+		listResult: []repository.User{{
+			TelegramUserID: 5,
+			FirstName:      "Mia",
+			Type:           repository.UserTypeWife,
+		}},
+	}
+	svc := NewUserService(store)
+
+	users, err := svc.ListUsers(context.Background())
+	if err != nil {
+		t.Fatalf("ListUsers() unexpected error: %v", err)
+	}
+	if len(users) != 1 || users[0].TelegramUserID != 5 || users[0].FirstName != "Mia" || users[0].Type != "wife" {
+		t.Fatalf("unexpected listed users: %#v", users)
 	}
 }

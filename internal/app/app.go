@@ -45,16 +45,18 @@ func New(cfg Config, logger *slog.Logger) (*App, error) {
 	userService := service.NewUserService(userRepo)
 	reminderRepo := repository.NewReminderRepository(db)
 	reminderService := service.NewReminderService(reminderRepo)
+	loveNoteScheduleRepo := repository.NewLoveNoteScheduleRepository(db)
+	loveNoteScheduleService := service.NewLoveNoteScheduleService(loveNoteScheduleRepo)
 	celebrationRepo := repository.NewCelebrationRepository(db)
 	celebrationService := service.NewCelebrationService(celebrationRepo)
 
-	b, err := telegram.NewBot(cfg.BotToken, logger, loveNoteService, memoryService, reminderService, celebrationService, userService, cfg.AdminTelegramUserID)
+	b, err := telegram.NewBot(cfg.BotToken, logger, loveNoteService, memoryService, reminderService, loveNoteScheduleService, celebrationService, userService, cfg.AdminTelegramUserID)
 	if err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("create telegram bot: %w", err)
 	}
 
-	cronScheduler, err := scheduler.NewCronScheduler(logger, b, reminderService, celebrationService)
+	cronScheduler, err := scheduler.NewCronScheduler(logger, b, loveNoteService, loveNoteScheduleService, reminderService, celebrationService)
 	if err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("create scheduler: %w", err)

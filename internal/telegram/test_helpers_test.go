@@ -154,6 +154,7 @@ type testBotDeps struct {
 	loveNotes            LoveNoteProvider
 	memories             MemoryProvider
 	reminders            ReminderProvider
+	loveSchedules        LoveNoteScheduleProvider
 	celebrations         CelebrationProvider
 	users                UserProvider
 	adminTelegramUserID  int64
@@ -181,12 +182,14 @@ func newTestBotHarness(t *testing.T, deps testBotDeps) *testBotHarness {
 		deps.loveNotes,
 		deps.memories,
 		deps.reminders,
+		deps.loveSchedules,
 		deps.celebrations,
 		deps.users,
 		deps.adminTelegramUserID,
 		newMemoryWizardState(),
 		newReminderWizardState(),
 		newEventWizardState(),
+		newLoveScheduleWizardState(),
 	)
 	if deps.registerMenuCommands {
 		registerMenuCommands(context.Background(), b, testLogger())
@@ -402,6 +405,34 @@ func (s *celebrationProviderSpy) ListEvents(_ context.Context, telegramUserID in
 	return s.listResult, s.listErr
 }
 
+type loveScheduleProviderSpy struct {
+	addTelegramUserID int64
+	addScheduleTime   string
+	addResult         service.LoveNoteSchedule
+	addErr            error
+
+	listResult []service.LoveNoteSchedule
+	listErr    error
+
+	removeScheduleID int64
+	removeErr        error
+}
+
+func (s *loveScheduleProviderSpy) AddLoveNoteSchedule(_ context.Context, telegramUserID int64, scheduleTime string) (service.LoveNoteSchedule, error) {
+	s.addTelegramUserID = telegramUserID
+	s.addScheduleTime = scheduleTime
+	return s.addResult, s.addErr
+}
+
+func (s *loveScheduleProviderSpy) ListLoveNoteSchedules(context.Context) ([]service.LoveNoteSchedule, error) {
+	return s.listResult, s.listErr
+}
+
+func (s *loveScheduleProviderSpy) RemoveLoveNoteSchedule(_ context.Context, scheduleID int64) error {
+	s.removeScheduleID = scheduleID
+	return s.removeErr
+}
+
 type userProviderSpy struct {
 	isRegisteredResult bool
 	isRegisteredErr    error
@@ -415,6 +446,9 @@ type userProviderSpy struct {
 	getUserID int64
 	getResult service.User
 	getErr    error
+
+	listResult []service.User
+	listErr    error
 }
 
 func (s *userProviderSpy) IsRegistered(_ context.Context, telegramUserID int64) (bool, error) {
@@ -434,4 +468,8 @@ func (s *userProviderSpy) CreateUser(_ context.Context, telegramUserID int64, fi
 func (s *userProviderSpy) GetUser(_ context.Context, telegramUserID int64) (service.User, error) {
 	s.getUserID = telegramUserID
 	return s.getResult, s.getErr
+}
+
+func (s *userProviderSpy) ListUsers(context.Context) ([]service.User, error) {
+	return s.listResult, s.listErr
 }

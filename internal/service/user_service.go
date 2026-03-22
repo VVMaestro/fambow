@@ -24,6 +24,7 @@ type UserStore interface {
 	ExistsByTelegramUserID(ctx context.Context, telegramUserID int64) (bool, error)
 	CreateUser(ctx context.Context, telegramUserID int64, firstName string, userType string) (repository.User, error)
 	FindByTelegramUserID(ctx context.Context, telegramUserID int64) (repository.User, error)
+	ListUsers(ctx context.Context) ([]repository.User, error)
 }
 
 type UserService struct {
@@ -90,4 +91,22 @@ func (s *UserService) GetUser(ctx context.Context, telegramUserID int64) (User, 
 		FirstName:      record.FirstName,
 		Type:           record.Type,
 	}, nil
+}
+
+func (s *UserService) ListUsers(ctx context.Context) ([]User, error) {
+	records, err := s.store.ListUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	users := make([]User, 0, len(records))
+	for _, record := range records {
+		users = append(users, User{
+			TelegramUserID: record.TelegramUserID,
+			FirstName:      record.FirstName,
+			Type:           record.Type,
+		})
+	}
+
+	return users, nil
 }

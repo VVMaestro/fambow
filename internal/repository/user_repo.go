@@ -87,6 +87,33 @@ func (r *UserRepository) FindByTelegramUserID(ctx context.Context, telegramUserI
 	return user, nil
 }
 
+func (r *UserRepository) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, telegram_user_id, first_name, type, created_at
+		FROM users
+		ORDER BY lower(first_name) ASC, id ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+
+	users := make([]User, 0)
+	for rows.Next() {
+		var user User
+		if err := rows.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.Type, &user.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan listed user: %w", err)
+		}
+		users = append(users, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate listed users: %w", err)
+	}
+
+	return users, nil
+}
+
 func userIDByTelegramUserID(ctx context.Context, db *sql.DB, telegramUserID int64) (int64, error) {
 	row := db.QueryRowContext(ctx, `
 		SELECT id

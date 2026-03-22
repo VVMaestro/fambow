@@ -23,6 +23,9 @@ func registerMenuCommands(ctx context.Context, b *bot.Bot, logger *slog.Logger) 
 		{Command: "event", Description: "Guided celebration creator"},
 		{Command: "events", Description: "List celebration dates"},
 		{Command: "create_user", Description: "Admin: create bot user"},
+		{Command: "love_scheduler", Description: "Admin: daily love note wizard"},
+		{Command: "love_schedulers", Description: "Admin: list love note schedulers"},
+		{Command: "love_scheduler_remove", Description: "Admin: remove love note scheduler"},
 	}
 
 	_, err := b.SetMyCommands(ctx, &bot.SetMyCommandsParams{

@@ -37,6 +37,14 @@ type LoveNote struct {
 	CreatedAt          time.Time
 }
 
+type LoveNoteSchedule struct {
+	ID           int64
+	UserID       int64
+	ScheduleTime string
+	IsActive     bool
+	CreatedAt    time.Time
+}
+
 type Event struct {
 	ID               int64
 	UserID           int64

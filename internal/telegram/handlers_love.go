@@ -93,19 +93,7 @@ func loveHandler(logger *slog.Logger, loveNotes LoveNoteProvider) bot.HandlerFun
 			}
 		}
 
-		if strings.TrimSpace(note.TelegramFileID) != "" {
-			sendLovePhoto(ctx, b, update.Message.Chat.ID, note, logger)
-			return
-		}
-
-		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:      update.Message.Chat.ID,
-			Text:        note.Text,
-			ReplyMarkup: commandKeyboard(),
-		})
-		if err != nil {
-			logger.Error("failed to send /love response", "error", err)
-		}
+		SendLoveNote(ctx, b, update.Message.Chat.ID, note, commandKeyboard(), logger)
 	}
 }
 
@@ -123,48 +111,6 @@ func saveLoveNote(ctx context.Context, b *bot.Bot, chatID int64, loveNotes LoveN
 	}
 
 	return true
-}
-
-func sendLovePhoto(ctx context.Context, b *bot.Bot, chatID int64, note service.LoveNote, logger *slog.Logger) {
-	caption := strings.TrimSpace(note.Text)
-	if caption == "" {
-		if _, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
-			ChatID:      chatID,
-			Photo:       &models.InputFileString{Data: note.TelegramFileID},
-			ReplyMarkup: commandKeyboard(),
-		}); err != nil {
-			logger.Error("failed to send /love photo response", "error", err)
-		}
-		return
-	}
-
-	if isLovePhotoCaptionTooLong(caption) {
-		sendLovePhotoWithTextFallback(ctx, b, chatID, note, logger)
-		return
-	}
-
-	if _, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
-		ChatID:      chatID,
-		Photo:       &models.InputFileString{Data: note.TelegramFileID},
-		Caption:     caption,
-		ReplyMarkup: commandKeyboard(),
-	}); err != nil {
-		logger.Error("failed to send /love photo response", "error", err)
-		sendLovePhotoWithTextFallback(ctx, b, chatID, note, logger)
-	}
-}
-
-func sendLovePhotoWithTextFallback(ctx context.Context, b *bot.Bot, chatID int64, note service.LoveNote, logger *slog.Logger) {
-	if _, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
-		ChatID:      chatID,
-		Photo:       &models.InputFileString{Data: note.TelegramFileID},
-		ReplyMarkup: commandKeyboard(),
-	}); err != nil {
-		logger.Error("failed to send /love fallback photo response", "error", err)
-		return
-	}
-
-	sendText(ctx, b, chatID, strings.TrimSpace(note.Text), logger, "/love photo fallback text")
 }
 
 func isLovePhotoCaptionTooLong(caption string) bool {
