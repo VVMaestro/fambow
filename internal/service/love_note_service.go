@@ -5,17 +5,26 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"fambow/internal/repository"
 )
 
 var ErrLoveNoteContentEmpty = errors.New("love note content cannot be empty")
 var ErrLoveNotesEmpty = errors.New("no love notes available")
+var ErrLoveNoteIDsInvalid = errors.New("love note ids are invalid")
 
 type LoveNote struct {
 	Text               string
 	TelegramFileID     string
 	TelegramFileUnique string
+}
+
+type AdminLoveNote struct {
+	ID        int64
+	Text      string
+	HasPhoto  bool
+	CreatedAt time.Time
 }
 
 type LoveNoteInput struct {
@@ -24,9 +33,16 @@ type LoveNoteInput struct {
 	TelegramFileUnique string
 }
 
+type DeleteLoveNotesResult struct {
+	DeletedIDs []int64
+	MissingIDs []int64
+}
+
 type LoveNoteStore interface {
 	AddLoveNote(ctx context.Context, note repository.LoveNote) error
 	RandomNote(ctx context.Context) (repository.LoveNote, error)
+	ListLoveNotes(ctx context.Context) ([]repository.LoveNote, error)
+	DeleteLoveNotes(ctx context.Context, noteIDs []int64) ([]int64, error)
 }
 
 type LoveNoteService struct {
@@ -87,6 +103,64 @@ func (s *LoveNoteService) RandomNote(ctx context.Context, firstName string) (Lov
 	return note, nil
 }
 
+func (s *LoveNoteService) ListLoveNotes(ctx context.Context) ([]AdminLoveNote, error) {
+	if s.store == nil {
+		return nil, nil
+	}
+
+	records, err := s.store.ListLoveNotes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	notes := make([]AdminLoveNote, 0, len(records))
+	for _, record := range records {
+		notes = append(notes, AdminLoveNote{
+			ID:        record.ID,
+			Text:      strings.TrimSpace(record.Text),
+			HasPhoto:  strings.TrimSpace(record.TelegramFileID) != "",
+			CreatedAt: record.CreatedAt,
+		})
+	}
+
+	return notes, nil
+}
+
+func (s *LoveNoteService) DeleteLoveNotes(ctx context.Context, noteIDs []int64) (DeleteLoveNotesResult, error) {
+	normalizedIDs, err := normalizeLoveNoteIDs(noteIDs)
+	if err != nil {
+		return DeleteLoveNotesResult{}, err
+	}
+
+	if s.store == nil {
+		return DeleteLoveNotesResult{MissingIDs: normalizedIDs}, nil
+	}
+
+	deletedIDs, err := s.store.DeleteLoveNotes(ctx, normalizedIDs)
+	if err != nil {
+		return DeleteLoveNotesResult{}, err
+	}
+
+	deletedSet := make(map[int64]struct{}, len(deletedIDs))
+	for _, id := range deletedIDs {
+		deletedSet[id] = struct{}{}
+	}
+
+	result := DeleteLoveNotesResult{
+		DeletedIDs: make([]int64, 0, len(deletedIDs)),
+		MissingIDs: make([]int64, 0),
+	}
+	for _, id := range normalizedIDs {
+		if _, ok := deletedSet[id]; ok {
+			result.DeletedIDs = append(result.DeletedIDs, id)
+			continue
+		}
+		result.MissingIDs = append(result.MissingIDs, id)
+	}
+
+	return result, nil
+}
+
 func formatLoveNoteText(template string, name string) string {
 	if template == "" {
 		return ""
@@ -97,4 +171,25 @@ func formatLoveNoteText(template string, name string) string {
 	}
 
 	return template
+}
+
+func normalizeLoveNoteIDs(noteIDs []int64) ([]int64, error) {
+	if len(noteIDs) == 0 {
+		return nil, ErrLoveNoteIDsInvalid
+	}
+
+	seen := make(map[int64]struct{}, len(noteIDs))
+	normalized := make([]int64, 0, len(noteIDs))
+	for _, id := range noteIDs {
+		if id <= 0 {
+			return nil, ErrLoveNoteIDsInvalid
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		normalized = append(normalized, id)
+	}
+
+	return normalized, nil
 }

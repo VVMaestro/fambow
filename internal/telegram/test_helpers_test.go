@@ -306,6 +306,11 @@ type loveNoteProviderSpy struct {
 	randomErr       error
 	addedNote       service.LoveNoteInput
 	addErr          error
+	listResult      []service.AdminLoveNote
+	listErr         error
+	deleteIDs       []int64
+	deleteResult    service.DeleteLoveNotesResult
+	deleteErr       error
 }
 
 func (s *loveNoteProviderSpy) RandomNote(_ context.Context, firstName string) (service.LoveNote, error) {
@@ -316,6 +321,15 @@ func (s *loveNoteProviderSpy) RandomNote(_ context.Context, firstName string) (s
 func (s *loveNoteProviderSpy) AddLoveNote(_ context.Context, note service.LoveNoteInput) error {
 	s.addedNote = note
 	return s.addErr
+}
+
+func (s *loveNoteProviderSpy) ListLoveNotes(context.Context) ([]service.AdminLoveNote, error) {
+	return s.listResult, s.listErr
+}
+
+func (s *loveNoteProviderSpy) DeleteLoveNotes(_ context.Context, noteIDs []int64) (service.DeleteLoveNotesResult, error) {
+	s.deleteIDs = append([]int64(nil), noteIDs...)
+	return s.deleteResult, s.deleteErr
 }
 
 type memoryProviderSpy struct {

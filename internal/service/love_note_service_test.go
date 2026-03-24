@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"fambow/internal/repository"
 )
@@ -12,6 +14,11 @@ type loveNoteStoreSpy struct {
 	addErr       error
 	randomResult repository.LoveNote
 	randomErr    error
+	listResult   []repository.LoveNote
+	listErr      error
+	deleteIDs    []int64
+	deleteResult []int64
+	deleteErr    error
 }
 
 func (s *loveNoteStoreSpy) AddLoveNote(_ context.Context, note repository.LoveNote) error {
@@ -21,6 +28,15 @@ func (s *loveNoteStoreSpy) AddLoveNote(_ context.Context, note repository.LoveNo
 
 func (s *loveNoteStoreSpy) RandomNote(_ context.Context) (repository.LoveNote, error) {
 	return s.randomResult, s.randomErr
+}
+
+func (s *loveNoteStoreSpy) ListLoveNotes(context.Context) ([]repository.LoveNote, error) {
+	return s.listResult, s.listErr
+}
+
+func (s *loveNoteStoreSpy) DeleteLoveNotes(_ context.Context, noteIDs []int64) ([]int64, error) {
+	s.deleteIDs = append([]int64(nil), noteIDs...)
+	return s.deleteResult, s.deleteErr
 }
 
 func TestAddLoveNoteTextOnly(t *testing.T) {
@@ -126,5 +142,67 @@ func TestRandomLoveNoteFormatsTemplateText(t *testing.T) {
 
 	if note.Text != "Hey Anna, you are magic." {
 		t.Fatalf("unexpected formatted text: %#v", note)
+	}
+}
+
+func TestListLoveNotesMapsAdminFields(t *testing.T) {
+	store := &loveNoteStoreSpy{
+		listResult: []repository.LoveNote{
+			{
+				ID:             5,
+				Text:           "  Sunset walk  ",
+				TelegramFileID: "photo-1",
+				CreatedAt:      time.Date(2026, time.March, 20, 18, 15, 0, 0, time.Local),
+			},
+		},
+	}
+	svc := NewLoveNoteService(store)
+
+	notes, err := svc.ListLoveNotes(context.Background())
+	if err != nil {
+		t.Fatalf("ListLoveNotes() unexpected error: %v", err)
+	}
+	if len(notes) != 1 {
+		t.Fatalf("expected 1 note, got %d", len(notes))
+	}
+	if notes[0].ID != 5 || notes[0].Text != "Sunset walk" || !notes[0].HasPhoto {
+		t.Fatalf("unexpected admin love note: %#v", notes[0])
+	}
+}
+
+func TestDeleteLoveNotesDeduplicatesAndTracksMissing(t *testing.T) {
+	store := &loveNoteStoreSpy{deleteResult: []int64{2, 7}}
+	svc := NewLoveNoteService(store)
+
+	result, err := svc.DeleteLoveNotes(context.Background(), []int64{2, 7, 2, 10})
+	if err != nil {
+		t.Fatalf("DeleteLoveNotes() unexpected error: %v", err)
+	}
+	if len(store.deleteIDs) != 3 || store.deleteIDs[0] != 2 || store.deleteIDs[1] != 7 || store.deleteIDs[2] != 10 {
+		t.Fatalf("unexpected normalized delete ids: %#v", store.deleteIDs)
+	}
+	if len(result.DeletedIDs) != 2 || result.DeletedIDs[0] != 2 || result.DeletedIDs[1] != 7 {
+		t.Fatalf("unexpected deleted ids: %#v", result.DeletedIDs)
+	}
+	if len(result.MissingIDs) != 1 || result.MissingIDs[0] != 10 {
+		t.Fatalf("unexpected missing ids: %#v", result.MissingIDs)
+	}
+}
+
+func TestDeleteLoveNotesRejectsInvalidInput(t *testing.T) {
+	svc := NewLoveNoteService(&loveNoteStoreSpy{})
+
+	tests := [][]int64{
+		nil,
+		{},
+		{1, 0},
+		{-1},
+	}
+
+	for _, noteIDs := range tests {
+		_, err := svc.DeleteLoveNotes(context.Background(), noteIDs)
+		if !errors.Is(err, ErrLoveNoteIDsInvalid) {
+			t.Fatalf("expected ErrLoveNoteIDsInvalid for %#v, got %v", noteIDs, err)
+		}
 	}
 }

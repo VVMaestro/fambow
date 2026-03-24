@@ -18,6 +18,8 @@ type BotRunner interface {
 type LoveNoteProvider interface {
 	RandomNote(ctx context.Context, firstName string) (service.LoveNote, error)
 	AddLoveNote(ctx context.Context, input service.LoveNoteInput) error
+	ListLoveNotes(ctx context.Context) ([]service.AdminLoveNote, error)
+	DeleteLoveNotes(ctx context.Context, noteIDs []int64) (service.DeleteLoveNotesResult, error)
 }
 
 type MemoryProvider interface {

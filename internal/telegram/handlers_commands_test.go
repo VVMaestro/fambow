@@ -54,6 +54,12 @@ func TestStartAndHelpHandlersIncludeShortcuts(t *testing.T) {
 	if !strings.Contains(help.Fields["text"], "Photo shortcut: send a photo with caption /add_love <optional note>") {
 		t.Fatalf("expected /help text to mention photo /add_love shortcut, got %q", help.Fields["text"])
 	}
+	if !strings.Contains(help.Fields["text"], "/list_love_notes - admin list saved love notes") {
+		t.Fatalf("expected /help text to mention /list_love_notes, got %q", help.Fields["text"])
+	}
+	if !strings.Contains(help.Fields["text"], "/delete_love_notes <id> <id> ... - admin delete saved love notes") {
+		t.Fatalf("expected /help text to mention /delete_love_notes, got %q", help.Fields["text"])
+	}
 
 	helpKeyboard := parseReplyKeyboardMarkup(t, help.Fields["reply_markup"])
 	if !replyKeyboardContains(helpKeyboard, "My Reminders") {
@@ -241,6 +247,136 @@ func TestLoveCommands(t *testing.T) {
 		}
 		if requests[1].Method != "sendMessage" || requests[1].Fields["text"] != strings.Repeat("a", telegramPhotoCaptionLimit+1) {
 			t.Fatalf("unexpected fallback text request: %#v", requests[1])
+		}
+	})
+}
+
+func TestLoveNoteAdminCommands(t *testing.T) {
+	t.Run("forbids non admin list and delete", func(t *testing.T) {
+		loveNotes := &loveNoteProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			loveNotes:           loveNotes,
+			adminTelegramUserID: 99,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/list_love_notes"))
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != "Only admin can use love note admin commands." {
+			t.Fatalf("unexpected non-admin list response: %q", got)
+		}
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/delete_love_notes 1 2"))
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != "Only admin can use love note admin commands." {
+			t.Fatalf("unexpected non-admin delete response: %q", got)
+		}
+	})
+
+	t.Run("list returns empty state", func(t *testing.T) {
+		loveNotes := &loveNoteProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			loveNotes:           loveNotes,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/list_love_notes"))
+
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != "No love notes yet. Add one with /add_love." {
+			t.Fatalf("unexpected empty list response: %q", got)
+		}
+	})
+
+	t.Run("list renders ids preview and photo marker", func(t *testing.T) {
+		loveNotes := &loveNoteProviderSpy{
+			listResult: []service.AdminLoveNote{
+				{
+					ID:        7,
+					Text:      "  Sunset walk with hot tea  ",
+					HasPhoto:  true,
+					CreatedAt: time.Date(2026, time.March, 20, 18, 15, 0, 0, time.Local),
+				},
+				{
+					ID:        6,
+					HasPhoto:  true,
+					CreatedAt: time.Date(2026, time.March, 19, 9, 5, 0, 0, time.Local),
+				},
+			},
+		}
+		harness := newTestBotHarness(t, testBotDeps{
+			loveNotes:           loveNotes,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/list_love_notes"))
+
+		got := harness.client.lastRequest("sendMessage").Fields["text"]
+		if !strings.Contains(got, "Saved love notes:") {
+			t.Fatalf("expected header, got %q", got)
+		}
+		if !strings.Contains(got, "#7 2026-03-20 18:15 [photo] Sunset walk with hot tea") {
+			t.Fatalf("expected photo preview line, got %q", got)
+		}
+		if !strings.Contains(got, "#6 2026-03-19 09:05 [photo only]") {
+			t.Fatalf("expected photo-only line, got %q", got)
+		}
+	})
+
+	t.Run("list splits large output into multiple messages", func(t *testing.T) {
+		items := make([]service.AdminLoveNote, 0, 60)
+		for i := 0; i < 60; i++ {
+			items = append(items, service.AdminLoveNote{
+				ID:        int64(100 - i),
+				Text:      strings.Repeat("long preview text ", 8),
+				CreatedAt: time.Date(2026, time.March, 20, 18, 15, 0, 0, time.Local),
+			})
+		}
+		loveNotes := &loveNoteProviderSpy{listResult: items}
+		harness := newTestBotHarness(t, testBotDeps{
+			loveNotes:           loveNotes,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/list_love_notes"))
+
+		requests := harness.client.requestsFor("sendMessage")
+		if len(requests) < 2 {
+			t.Fatalf("expected list output to split into multiple messages, got %d", len(requests))
+		}
+	})
+
+	t.Run("delete returns usage for malformed payload", func(t *testing.T) {
+		loveNotes := &loveNoteProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			loveNotes:           loveNotes,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/delete_love_notes nope"))
+
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != deleteLoveNotesUsage() {
+			t.Fatalf("unexpected delete usage response: %q", got)
+		}
+	})
+
+	t.Run("delete reports partial success", func(t *testing.T) {
+		loveNotes := &loveNoteProviderSpy{
+			deleteResult: service.DeleteLoveNotesResult{
+				DeletedIDs: []int64{2, 7},
+				MissingIDs: []int64{10},
+			},
+		}
+		harness := newTestBotHarness(t, testBotDeps{
+			loveNotes:           loveNotes,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/delete_love_notes 2 7 2 10"))
+
+		if len(loveNotes.deleteIDs) != 4 || loveNotes.deleteIDs[0] != 2 || loveNotes.deleteIDs[1] != 7 || loveNotes.deleteIDs[2] != 2 || loveNotes.deleteIDs[3] != 10 {
+			t.Fatalf("unexpected delete inputs: %#v", loveNotes.deleteIDs)
+		}
+		got := harness.client.lastRequest("sendMessage").Fields["text"]
+		expected := "Deleted love notes: #2, #7\nMissing IDs: #10"
+		if got != expected {
+			t.Fatalf("unexpected partial delete response: %q", got)
 		}
 	})
 }
