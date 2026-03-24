@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -108,6 +109,16 @@ func (s *CronScheduler) dispatchLoveNoteSchedules(ctx context.Context, now time.
 	for _, item := range items {
 		note, err := s.loveNotes.RandomNote(ctx, item.FirstName)
 		if err != nil {
+			if errors.Is(err, service.ErrLoveNotesEmpty) {
+				if !telegram.SendLoveNotesEmptyState(ctx, s.sender, item.TelegramUserID, nil, s.logger) {
+					continue
+				}
+				if err := s.loveSchedules.MarkLoveNoteScheduleDispatched(ctx, item.ID, now); err != nil {
+					s.logger.Error("failed marking love note schedule dispatched", "schedule_id", item.ID, "error", err)
+				}
+				continue
+			}
+
 			s.logger.Error("failed fetching scheduled love note", "schedule_id", item.ID, "chat_id", item.TelegramUserID, "error", err)
 			continue
 		}

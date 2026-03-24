@@ -16,23 +16,6 @@ func NewLoveNoteRepository(db *sql.DB) *LoveNoteRepository {
 	return &LoveNoteRepository{db: db}
 }
 
-func (r *LoveNoteRepository) AddDefaultNotes(ctx context.Context, notes []string) error {
-	count, err := r.countNotes(ctx)
-	if err != nil {
-		return err
-	}
-
-	if count > 0 {
-		return nil
-	}
-
-	if err := r.addTextNotes(ctx, notes, "default"); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (r *LoveNoteRepository) AddLoveNote(ctx context.Context, note LoveNote) error {
 	trimmedText := strings.TrimSpace(note.Text)
 	telegramFileID := strings.TrimSpace(note.TelegramFileID)
@@ -44,41 +27,6 @@ func (r *LoveNoteRepository) AddLoveNote(ctx context.Context, note LoveNote) err
 	`, trimmedText, "custom", nullableString(telegramFileID), nullableString(telegramFileUnique))
 	if err != nil {
 		return fmt.Errorf("insert love note: %w", err)
-	}
-
-	return nil
-}
-
-func (r *LoveNoteRepository) addTextNotes(ctx context.Context, notes []string, tag string) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin love notes transaction: %w", err)
-	}
-
-	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO love_notes (text, tag, telegram_file_id, telegram_file_unique_id)
-		VALUES (?, ?, NULL, NULL)
-	`)
-	if err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("prepare love note insert: %w", err)
-	}
-	defer stmt.Close()
-
-	for _, note := range notes {
-		trimmed := strings.TrimSpace(note)
-		if trimmed == "" {
-			continue
-		}
-
-		if _, err := stmt.ExecContext(ctx, trimmed, tag); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("insert love note: %w", err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit love note transaction: %w", err)
 	}
 
 	return nil
@@ -110,20 +58,6 @@ func (r *LoveNoteRepository) RandomNote(ctx context.Context) (LoveNote, error) {
 	note.TelegramFileUnique = nullStringValue(telegramFileUnique)
 
 	return note, nil
-}
-
-func (r *LoveNoteRepository) countNotes(ctx context.Context) (int, error) {
-	row := r.db.QueryRowContext(ctx, `
-		SELECT COUNT(*)
-		FROM love_notes
-	`)
-
-	var count int
-	if err := row.Scan(&count); err != nil {
-		return 0, fmt.Errorf("count love notes: %w", err)
-	}
-
-	return count, nil
 }
 
 func nullableString(value string) any {

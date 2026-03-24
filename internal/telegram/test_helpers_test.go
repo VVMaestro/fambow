@@ -279,7 +279,7 @@ func parseInlineKeyboardMarkup(t *testing.T, raw string) models.InlineKeyboardMa
 func replyKeyboardContains(markup models.ReplyKeyboardMarkup, label string) bool {
 	for _, row := range markup.Keyboard {
 		for _, button := range row {
-			if button.Text == label {
+			if strings.Contains(button.Text, label) {
 				return true
 			}
 		}

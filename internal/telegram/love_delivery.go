@@ -16,6 +16,26 @@ type LoveNoteSender interface {
 	SendPhoto(ctx context.Context, params *bot.SendPhotoParams) (*models.Message, error)
 }
 
+const emptyLoveNotesMessage = "No love notes yet. Add one with /add_love."
+
+func SendLoveNotesEmptyState(ctx context.Context, sender LoveNoteSender, chatID int64, replyMarkup any, logger *slog.Logger) bool {
+	if sender == nil {
+		return false
+	}
+
+	_, err := sender.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID:      chatID,
+		Text:        emptyLoveNotesMessage,
+		ReplyMarkup: replyMarkup,
+	})
+	if err != nil {
+		logger.Error("failed to send empty love notes message", "chat_id", chatID, "error", err)
+		return false
+	}
+
+	return true
+}
+
 func SendLoveNote(ctx context.Context, sender LoveNoteSender, chatID int64, note service.LoveNote, replyMarkup any, logger *slog.Logger) bool {
 	if sender == nil {
 		return false

@@ -81,7 +81,6 @@ docker compose up --build -d
 
 - Uses SQLite file database (default `fambow.db`)
 - Applies all `.sql` files from `migrations/` on startup in filename order
-- Seeds default love notes into `love_notes` table when empty
 - Love notes can optionally store Telegram photo file IDs for photo note delivery
 - Scheduler checks every minute and dispatches due reminders/events
 

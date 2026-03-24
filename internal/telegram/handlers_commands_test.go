@@ -91,14 +91,29 @@ func TestLoveCommands(t *testing.T) {
 		}
 	})
 
-	t.Run("love falls back when provider is nil", func(t *testing.T) {
+	t.Run("love returns explicit empty state when provider has no notes", func(t *testing.T) {
+		loveNotes := &loveNoteProviderSpy{randomErr: service.ErrLoveNotesEmpty}
+		harness := newTestBotHarness(t, testBotDeps{
+			loveNotes:           loveNotes,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/love"))
+
+		request := harness.client.lastRequest("sendMessage")
+		if request.Fields["text"] != "No love notes yet. Add one with /add_love." {
+			t.Fatalf("unexpected empty-state /love response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("love returns configuration message when provider is nil", func(t *testing.T) {
 		harness := newTestBotHarness(t, testBotDeps{adminTelegramUserID: 1})
 
 		processUpdate(t, harness, newTextUpdate(1, 100, "/love"))
 
 		request := harness.client.lastRequest("sendMessage")
-		if request.Fields["text"] != "You are loved so much, my love." {
-			t.Fatalf("unexpected fallback /love response: %q", request.Fields["text"])
+		if request.Fields["text"] != "Love note feature is not configured yet." {
+			t.Fatalf("unexpected nil-provider /love response: %q", request.Fields["text"])
 		}
 	})
 

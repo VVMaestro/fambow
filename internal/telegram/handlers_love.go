@@ -78,19 +78,26 @@ func loveHandler(logger *slog.Logger, loveNotes LoveNoteProvider) bot.HandlerFun
 			return
 		}
 
+		if loveNotes == nil {
+			sendText(ctx, b, update.Message.Chat.ID, "Love note feature is not configured yet.", logger, "/love unavailable")
+			return
+		}
+
 		firstName := ""
 		if update.Message.From != nil {
 			firstName = update.Message.From.FirstName
 		}
 
-		note := service.LoveNote{Text: "You are loved so much, my love."}
-		if loveNotes != nil {
-			result, err := loveNotes.RandomNote(ctx, firstName)
-			if err != nil {
-				logger.Error("failed to fetch love note", "error", err)
-			} else {
-				note = result
+		note, err := loveNotes.RandomNote(ctx, firstName)
+		if err != nil {
+			if errors.Is(err, service.ErrLoveNotesEmpty) {
+				SendLoveNotesEmptyState(ctx, b, update.Message.Chat.ID, commandKeyboard(), logger)
+				return
 			}
+
+			logger.Error("failed to fetch love note", "error", err)
+			sendText(ctx, b, update.Message.Chat.ID, "I could not load a love note right now. Please try again in a moment.", logger, "/love failed")
+			return
 		}
 
 		SendLoveNote(ctx, b, update.Message.Chat.ID, note, commandKeyboard(), logger)

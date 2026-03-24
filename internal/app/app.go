@@ -34,10 +34,6 @@ func New(cfg Config, logger *slog.Logger) (*App, error) {
 
 	loveNoteRepo := repository.NewLoveNoteRepository(db)
 	loveNoteService := service.NewLoveNoteService(loveNoteRepo)
-	if err := loveNoteService.SeedDefaults(context.Background()); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("seed default love notes: %w", err)
-	}
 
 	memoryRepo := repository.NewMemoryRepository(db)
 	memoryService := service.NewMemoryService(memoryRepo)

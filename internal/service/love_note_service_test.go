@@ -8,16 +8,10 @@ import (
 )
 
 type loveNoteStoreSpy struct {
-	defaultNotes []string
 	addedNote    repository.LoveNote
 	addErr       error
 	randomResult repository.LoveNote
 	randomErr    error
-}
-
-func (s *loveNoteStoreSpy) AddDefaultNotes(_ context.Context, notes []string) error {
-	s.defaultNotes = append([]string(nil), notes...)
-	return nil
 }
 
 func (s *loveNoteStoreSpy) AddLoveNote(_ context.Context, note repository.LoveNote) error {
@@ -108,6 +102,16 @@ func TestRandomLoveNoteReturnsPhotoPayload(t *testing.T) {
 	}
 	if note.TelegramFileID != "photo-1" || note.TelegramFileUnique != "photo-1-uniq" {
 		t.Fatalf("unexpected photo payload: %#v", note)
+	}
+}
+
+func TestRandomLoveNoteReturnsEmptyErrorWhenStoreHasNoNotes(t *testing.T) {
+	store := &loveNoteStoreSpy{}
+	svc := NewLoveNoteService(store)
+
+	_, err := svc.RandomNote(context.Background(), "Anna")
+	if err != ErrLoveNotesEmpty {
+		t.Fatalf("expected ErrLoveNotesEmpty, got %v", err)
 	}
 }
 

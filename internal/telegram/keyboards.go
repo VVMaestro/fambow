@@ -22,7 +22,7 @@ func commandKeyboard() *models.ReplyKeyboardMarkup {
 			},
 			{
 				{Text: "Event 🎉"},
-				{Text: "Events 🎊"},
+				{Text: "List Events 🎊"},
 			},
 		},
 		ResizeKeyboard: true,

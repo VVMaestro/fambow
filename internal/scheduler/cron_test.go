@@ -111,6 +111,34 @@ func TestCronSchedulerDispatchLoveNoteSchedulesText(t *testing.T) {
 	}
 }
 
+func TestCronSchedulerDispatchLoveNoteSchedulesEmptyState(t *testing.T) {
+	sender := &schedulerSenderSpy{}
+	schedules := &loveNoteSchedulerServiceSpy{
+		dueItems: []service.PendingLoveNoteSchedule{{
+			ID:             6,
+			TelegramUserID: 123,
+			FirstName:      "Mia",
+		}},
+	}
+	s := &CronScheduler{
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		sender:        sender,
+		loveNotes:     loveNoteProviderSpy{err: service.ErrLoveNotesEmpty},
+		loveSchedules: schedules,
+		reminders:     reminderSchedulerStub{},
+		celebrations:  celebrationSchedulerStub{},
+	}
+
+	s.dispatchLoveNoteSchedules(context.Background(), time.Date(2026, time.March, 22, 8, 30, 0, 0, time.Local))
+
+	if len(sender.messages) != 1 || sender.messages[0] != "No love notes yet. Add one with /add_love." {
+		t.Fatalf("unexpected empty-state messages: %#v", sender.messages)
+	}
+	if len(schedules.marked) != 1 || schedules.marked[0] != 6 {
+		t.Fatalf("unexpected marked schedules: %#v", schedules.marked)
+	}
+}
+
 func TestCronSchedulerDispatchLoveNoteSchedulesPhotoFallback(t *testing.T) {
 	sender := &schedulerSenderSpy{failCaptionedPhotoFirst: true}
 	schedules := &loveNoteSchedulerServiceSpy{
