@@ -6,20 +6,23 @@ func commandKeyboard() *models.ReplyKeyboardMarkup {
 	return &models.ReplyKeyboardMarkup{
 		Keyboard: [][]models.KeyboardButton{
 			{
-				{Text: "Love Note"},
-				{Text: "Memory"},
+				{Text: "Market 🛍"},
 			},
 			{
-				{Text: "Memories"},
-				{Text: "Surprise Memory"},
+				{Text: "Love Note ❤️"},
+				{Text: "Memory 💎"},
 			},
 			{
-				{Text: "Reminder"},
-				{Text: "My Reminders"},
+				{Text: "Memories 💠"},
+				{Text: "Surprise Memory 🎈"},
 			},
 			{
-				{Text: "Event"},
-				{Text: "Events"},
+				{Text: "Reminder 🎗"},
+				{Text: "My Reminders 🎗🎗🎗"},
+			},
+			{
+				{Text: "Event 🎉"},
+				{Text: "Events 🎊"},
 			},
 		},
 		ResizeKeyboard: true,

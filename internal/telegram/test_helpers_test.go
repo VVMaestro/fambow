@@ -156,6 +156,7 @@ type testBotDeps struct {
 	reminders            ReminderProvider
 	loveSchedules        LoveNoteScheduleProvider
 	celebrations         CelebrationProvider
+	products             ProductProvider
 	users                UserProvider
 	adminTelegramUserID  int64
 	registerMenuCommands bool
@@ -184,6 +185,7 @@ func newTestBotHarness(t *testing.T, deps testBotDeps) *testBotHarness {
 		deps.reminders,
 		deps.loveSchedules,
 		deps.celebrations,
+		deps.products,
 		deps.users,
 		deps.adminTelegramUserID,
 		newMemoryWizardState(),
@@ -449,6 +451,11 @@ type userProviderSpy struct {
 
 	listResult []service.User
 	listErr    error
+
+	setMoneyUserID int64
+	setMoneyValue  int64
+	setMoneyResult service.User
+	setMoneyErr    error
 }
 
 func (s *userProviderSpy) IsRegistered(_ context.Context, telegramUserID int64) (bool, error) {
@@ -472,4 +479,48 @@ func (s *userProviderSpy) GetUser(_ context.Context, telegramUserID int64) (serv
 
 func (s *userProviderSpy) ListUsers(context.Context) ([]service.User, error) {
 	return s.listResult, s.listErr
+}
+
+func (s *userProviderSpy) SetMoney(_ context.Context, telegramUserID int64, money int64) (service.User, error) {
+	s.setMoneyUserID = telegramUserID
+	s.setMoneyValue = money
+	return s.setMoneyResult, s.setMoneyErr
+}
+
+type productProviderSpy struct {
+	addCommand    string
+	addResult     service.Product
+	addErr        error
+	removeCommand string
+	removeResult  int64
+	removeErr     error
+	listResult    []service.Product
+	listErr       error
+	buyBuyerID    int64
+	buyProductID  int64
+	buyResult     service.PurchaseResult
+	buyErr        error
+}
+
+func (s *productProviderSpy) AddProduct(_ context.Context, command string) (service.Product, error) {
+	s.addCommand = command
+	return s.addResult, s.addErr
+}
+
+func (s *productProviderSpy) RemoveProduct(_ context.Context, command string) (int64, error) {
+	s.removeCommand = command
+	if s.removeResult != 0 {
+		return s.removeResult, s.removeErr
+	}
+	return 0, s.removeErr
+}
+
+func (s *productProviderSpy) ListProducts(context.Context) ([]service.Product, error) {
+	return s.listResult, s.listErr
+}
+
+func (s *productProviderSpy) BuyProduct(_ context.Context, buyerTelegramUserID int64, productID int64) (service.PurchaseResult, error) {
+	s.buyBuyerID = buyerTelegramUserID
+	s.buyProductID = productID
+	return s.buyResult, s.buyErr
 }

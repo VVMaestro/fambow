@@ -16,6 +16,12 @@ type userStoreSpy struct {
 	createErr            error
 	listResult           []repository.User
 	listErr              error
+	findResult           repository.User
+	findErr              error
+	setMoneyUserID       int64
+	setMoneyValue        int64
+	setMoneyResult       repository.User
+	setMoneyErr          error
 }
 
 func (s *userStoreSpy) ExistsByTelegramUserID(context.Context, int64) (bool, error) {
@@ -30,11 +36,17 @@ func (s *userStoreSpy) CreateUser(_ context.Context, telegramUserID int64, first
 }
 
 func (s *userStoreSpy) FindByTelegramUserID(context.Context, int64) (repository.User, error) {
-	return repository.User{}, nil
+	return s.findResult, s.findErr
 }
 
 func (s *userStoreSpy) ListUsers(context.Context) ([]repository.User, error) {
 	return s.listResult, s.listErr
+}
+
+func (s *userStoreSpy) SetMoneyByTelegramUserID(_ context.Context, telegramUserID int64, money int64) (repository.User, error) {
+	s.setMoneyUserID = telegramUserID
+	s.setMoneyValue = money
+	return s.setMoneyResult, s.setMoneyErr
 }
 
 func TestUserServiceCreateUserValidation(t *testing.T) {
@@ -112,5 +124,28 @@ func TestUserServiceListUsers(t *testing.T) {
 	}
 	if len(users) != 1 || users[0].TelegramUserID != 5 || users[0].FirstName != "Mia" || users[0].Type != "wife" {
 		t.Fatalf("unexpected listed users: %#v", users)
+	}
+}
+
+func TestUserServiceSetMoney(t *testing.T) {
+	store := &userStoreSpy{
+		setMoneyResult: repository.User{
+			TelegramUserID: 5,
+			FirstName:      "Mia",
+			Type:           repository.UserTypeWife,
+			Money:          80,
+		},
+	}
+	svc := NewUserService(store)
+
+	user, err := svc.SetMoney(context.Background(), 5, 80)
+	if err != nil {
+		t.Fatalf("SetMoney() unexpected error: %v", err)
+	}
+	if store.setMoneyUserID != 5 || store.setMoneyValue != 80 {
+		t.Fatalf("unexpected set money inputs: id=%d money=%d", store.setMoneyUserID, store.setMoneyValue)
+	}
+	if user.Money != 80 {
+		t.Fatalf("unexpected set money result: %#v", user)
 	}
 }

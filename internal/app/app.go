@@ -49,8 +49,10 @@ func New(cfg Config, logger *slog.Logger) (*App, error) {
 	loveNoteScheduleService := service.NewLoveNoteScheduleService(loveNoteScheduleRepo)
 	celebrationRepo := repository.NewCelebrationRepository(db)
 	celebrationService := service.NewCelebrationService(celebrationRepo)
+	productRepo := repository.NewProductRepository(db)
+	productService := service.NewProductService(productRepo)
 
-	b, err := telegram.NewBot(cfg.BotToken, logger, loveNoteService, memoryService, reminderService, loveNoteScheduleService, celebrationService, userService, cfg.AdminTelegramUserID)
+	b, err := telegram.NewBot(cfg.BotToken, logger, loveNoteService, memoryService, reminderService, loveNoteScheduleService, celebrationService, productService, userService, cfg.AdminTelegramUserID)
 	if err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("create telegram bot: %w", err)

@@ -39,8 +39,8 @@ func (r *UserRepository) ExistsByTelegramUserID(ctx context.Context, telegramUse
 
 func (r *UserRepository) CreateUser(ctx context.Context, telegramUserID int64, firstName string, userType string) (User, error) {
 	result, err := r.db.ExecContext(ctx, `
-		INSERT INTO users (telegram_user_id, first_name, type)
-		VALUES (?, ?, ?)
+		INSERT INTO users (telegram_user_id, first_name, type, money)
+		VALUES (?, ?, ?, 0)
 	`, telegramUserID, strings.TrimSpace(firstName), strings.TrimSpace(strings.ToLower(userType)))
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {
@@ -55,13 +55,13 @@ func (r *UserRepository) CreateUser(ctx context.Context, telegramUserID int64, f
 	}
 
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, telegram_user_id, first_name, type, created_at
+		SELECT id, telegram_user_id, first_name, type, money, created_at
 		FROM users
 		WHERE id = ?
 	`, userID)
 
 	var user User
-	if err := row.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.Type, &user.CreatedAt); err != nil {
+	if err := row.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.Type, &user.Money, &user.CreatedAt); err != nil {
 		return User{}, fmt.Errorf("scan inserted user: %w", err)
 	}
 
@@ -70,14 +70,14 @@ func (r *UserRepository) CreateUser(ctx context.Context, telegramUserID int64, f
 
 func (r *UserRepository) FindByTelegramUserID(ctx context.Context, telegramUserID int64) (User, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, telegram_user_id, first_name, type, created_at
+		SELECT id, telegram_user_id, first_name, type, money, created_at
 		FROM users
 		WHERE telegram_user_id = ?
 		LIMIT 1
 	`, telegramUserID)
 
 	var user User
-	if err := row.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.Type, &user.CreatedAt); err != nil {
+	if err := row.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.Type, &user.Money, &user.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return User{}, ErrUserNotFound
 		}
@@ -89,7 +89,7 @@ func (r *UserRepository) FindByTelegramUserID(ctx context.Context, telegramUserI
 
 func (r *UserRepository) ListUsers(ctx context.Context) ([]User, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, telegram_user_id, first_name, type, created_at
+		SELECT id, telegram_user_id, first_name, type, money, created_at
 		FROM users
 		ORDER BY lower(first_name) ASC, id ASC
 	`)
@@ -101,7 +101,7 @@ func (r *UserRepository) ListUsers(ctx context.Context) ([]User, error) {
 	users := make([]User, 0)
 	for rows.Next() {
 		var user User
-		if err := rows.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.Type, &user.CreatedAt); err != nil {
+		if err := rows.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.Type, &user.Money, &user.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan listed user: %w", err)
 		}
 		users = append(users, user)
@@ -112,6 +112,27 @@ func (r *UserRepository) ListUsers(ctx context.Context) ([]User, error) {
 	}
 
 	return users, nil
+}
+
+func (r *UserRepository) SetMoneyByTelegramUserID(ctx context.Context, telegramUserID int64, money int64) (User, error) {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE users
+		SET money = ?
+		WHERE telegram_user_id = ?
+	`, money, telegramUserID)
+	if err != nil {
+		return User{}, fmt.Errorf("set user money: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return User{}, fmt.Errorf("read updated user rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return User{}, ErrUserNotFound
+	}
+
+	return r.FindByTelegramUserID(ctx, telegramUserID)
 }
 
 func userIDByTelegramUserID(ctx context.Context, db *sql.DB, telegramUserID int64) (int64, error) {

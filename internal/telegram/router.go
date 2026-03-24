@@ -43,14 +43,22 @@ type CelebrationProvider interface {
 	ListEvents(ctx context.Context, telegramUserID int64) ([]service.CelebrationEvent, error)
 }
 
+type ProductProvider interface {
+	AddProduct(ctx context.Context, command string) (service.Product, error)
+	RemoveProduct(ctx context.Context, command string) (int64, error)
+	ListProducts(ctx context.Context) ([]service.Product, error)
+	BuyProduct(ctx context.Context, buyerTelegramUserID int64, productID int64) (service.PurchaseResult, error)
+}
+
 type UserProvider interface {
 	IsRegistered(ctx context.Context, telegramUserID int64) (bool, error)
 	CreateUser(ctx context.Context, telegramUserID int64, firstName string, userType string) (service.User, error)
 	GetUser(ctx context.Context, telegramUserID int64) (service.User, error)
 	ListUsers(ctx context.Context) ([]service.User, error)
+	SetMoney(ctx context.Context, telegramUserID int64, money int64) (service.User, error)
 }
 
-func NewBot(token string, logger *slog.Logger, loveNotes LoveNoteProvider, memories MemoryProvider, reminders ReminderProvider, loveSchedules LoveNoteScheduleProvider, celebrations CelebrationProvider, users UserProvider, adminTelegramUserID int64) (*bot.Bot, error) {
+func NewBot(token string, logger *slog.Logger, loveNotes LoveNoteProvider, memories MemoryProvider, reminders ReminderProvider, loveSchedules LoveNoteScheduleProvider, celebrations CelebrationProvider, products ProductProvider, users UserProvider, adminTelegramUserID int64) (*bot.Bot, error) {
 	b, err := bot.New(token, bot.WithDefaultHandler(defaultHandler(logger)))
 	if err != nil {
 		return nil, fmt.Errorf("init telegram client: %w", err)
@@ -60,7 +68,7 @@ func NewBot(token string, logger *slog.Logger, loveNotes LoveNoteProvider, memor
 	reminderWizard := newReminderWizardState()
 	eventWizard := newEventWizardState()
 	loveScheduleWizard := newLoveScheduleWizardState()
-	registerCoreHandlers(b, logger, loveNotes, memories, reminders, loveSchedules, celebrations, users, adminTelegramUserID, memoryWizard, reminderWizard, eventWizard, loveScheduleWizard)
+	registerCoreHandlers(b, logger, loveNotes, memories, reminders, loveSchedules, celebrations, products, users, adminTelegramUserID, memoryWizard, reminderWizard, eventWizard, loveScheduleWizard)
 	registerMenuCommands(context.Background(), b, logger)
 	return b, nil
 }

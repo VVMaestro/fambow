@@ -7,6 +7,7 @@ type User struct {
 	TelegramUserID int64
 	FirstName      string
 	Type           string
+	Money          int64
 	CreatedAt      time.Time
 }
 
@@ -51,4 +52,11 @@ type Event struct {
 	Title            string
 	EventDate        time.Time
 	RemindDaysBefore int
+}
+
+type Product struct {
+	ID        int64
+	Name      string
+	Cost      int64
+	CreatedAt time.Time
 }

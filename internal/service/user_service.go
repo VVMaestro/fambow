@@ -18,6 +18,7 @@ type User struct {
 	TelegramUserID int64
 	FirstName      string
 	Type           string
+	Money          int64
 }
 
 type UserStore interface {
@@ -25,6 +26,7 @@ type UserStore interface {
 	CreateUser(ctx context.Context, telegramUserID int64, firstName string, userType string) (repository.User, error)
 	FindByTelegramUserID(ctx context.Context, telegramUserID int64) (repository.User, error)
 	ListUsers(ctx context.Context) ([]repository.User, error)
+	SetMoneyByTelegramUserID(ctx context.Context, telegramUserID int64, money int64) (repository.User, error)
 }
 
 type UserService struct {
@@ -70,6 +72,7 @@ func (s *UserService) CreateUser(ctx context.Context, telegramUserID int64, firs
 		TelegramUserID: record.TelegramUserID,
 		FirstName:      record.FirstName,
 		Type:           record.Type,
+		Money:          record.Money,
 	}, nil
 }
 
@@ -90,6 +93,7 @@ func (s *UserService) GetUser(ctx context.Context, telegramUserID int64) (User, 
 		TelegramUserID: record.TelegramUserID,
 		FirstName:      record.FirstName,
 		Type:           record.Type,
+		Money:          record.Money,
 	}, nil
 }
 
@@ -105,8 +109,33 @@ func (s *UserService) ListUsers(ctx context.Context) ([]User, error) {
 			TelegramUserID: record.TelegramUserID,
 			FirstName:      record.FirstName,
 			Type:           record.Type,
+			Money:          record.Money,
 		})
 	}
 
 	return users, nil
+}
+
+func (s *UserService) SetMoney(ctx context.Context, telegramUserID int64, money int64) (User, error) {
+	if telegramUserID <= 0 {
+		return User{}, ErrUserTelegramIDInvalid
+	}
+	if money < 0 {
+		return User{}, ErrMoneyAmountInvalid
+	}
+
+	record, err := s.store.SetMoneyByTelegramUserID(ctx, telegramUserID, money)
+	if err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			return User{}, ErrUserNotFound
+		}
+		return User{}, err
+	}
+
+	return User{
+		TelegramUserID: record.TelegramUserID,
+		FirstName:      record.FirstName,
+		Type:           record.Type,
+		Money:          record.Money,
+	}, nil
 }
