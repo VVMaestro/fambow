@@ -366,18 +366,23 @@ func (s *memoryProviderSpy) RandomMemory(_ context.Context) (service.Memory, err
 }
 
 type reminderProviderSpy struct {
-	addUserID      int64
-	addFirstName   string
-	addCommand     string
-	addResult      service.Reminder
-	addErr         error
-	targetUserType string
-	targetCommand  string
-	targetResult   service.Reminder
-	targetErr      error
-	listUserID     int64
-	listResult     []service.Reminder
-	listErr        error
+	addUserID        int64
+	addFirstName     string
+	addCommand       string
+	addResult        service.Reminder
+	addErr           error
+	targetUserType   string
+	targetCommand    string
+	targetResult     service.Reminder
+	targetErr        error
+	listUserID       int64
+	listResult       []service.Reminder
+	listErr          error
+	adminListActive  bool
+	adminListResult  []service.AdminReminder
+	adminListErr     error
+	removeReminderID int64
+	removeErr        error
 }
 
 func (s *reminderProviderSpy) AddReminder(_ context.Context, telegramUserID int64, firstName string, command string) (service.Reminder, error) {
@@ -396,6 +401,16 @@ func (s *reminderProviderSpy) AddReminderForUserType(_ context.Context, userType
 func (s *reminderProviderSpy) ListReminders(_ context.Context, telegramUserID int64) ([]service.Reminder, error) {
 	s.listUserID = telegramUserID
 	return s.listResult, s.listErr
+}
+
+func (s *reminderProviderSpy) ListRemindersByActiveState(_ context.Context, isActive bool) ([]service.AdminReminder, error) {
+	s.adminListActive = isActive
+	return s.adminListResult, s.adminListErr
+}
+
+func (s *reminderProviderSpy) RemoveReminder(_ context.Context, reminderID int64) error {
+	s.removeReminderID = reminderID
+	return s.removeErr
 }
 
 type celebrationProviderSpy struct {

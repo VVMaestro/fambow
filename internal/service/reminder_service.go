@@ -20,14 +20,17 @@ const (
 )
 
 var (
-	ErrReminderCommandEmpty   = errors.New("reminder command cannot be empty")
-	ErrReminderInvalidFormat  = errors.New("invalid reminder format")
-	ErrReminderTimeFormat     = errors.New("invalid time format")
-	ErrReminderDateTimeFormat = errors.New("invalid datetime format")
-	ErrReminderTimeInPast     = errors.New("reminder time is in the past")
-	ErrReminderTextEmpty      = errors.New("reminder text cannot be empty")
-	ErrReminderUserNotFound   = errors.New("sender user not found")
-	ErrReminderTargetNotFound = errors.New("target user not found")
+	ErrReminderCommandEmpty      = errors.New("reminder command cannot be empty")
+	ErrReminderInvalidFormat     = errors.New("invalid reminder format")
+	ErrReminderTimeFormat        = errors.New("invalid time format")
+	ErrReminderDateTimeFormat    = errors.New("invalid datetime format")
+	ErrReminderTimeInPast        = errors.New("reminder time is in the past")
+	ErrReminderTextEmpty         = errors.New("reminder text cannot be empty")
+	ErrReminderUserNotFound      = errors.New("sender user not found")
+	ErrReminderTargetNotFound    = errors.New("target user not found")
+	ErrReminderIDInvalid         = errors.New("reminder id is invalid")
+	ErrReminderNotFound          = errors.New("reminder not found")
+	ErrReminderListFilterInvalid = errors.New("reminder list filter is invalid")
 )
 
 type Reminder struct {
@@ -35,6 +38,17 @@ type Reminder struct {
 	Text            string
 	ScheduleType    string
 	ScheduleDisplay string
+}
+
+type AdminReminder struct {
+	ID              int64
+	TelegramUserID  int64
+	FirstName       string
+	UserType        string
+	Text            string
+	ScheduleType    string
+	ScheduleDisplay string
+	IsActive        bool
 }
 
 type PendingReminder struct {
@@ -49,9 +63,11 @@ type ReminderStore interface {
 	SaveReminder(ctx context.Context, telegramUserID int64, firstName string, text string, scheduleType string, scheduleValue string) (repository.Reminder, error)
 	SaveReminderForUserType(ctx context.Context, userType string, text string, scheduleType string, scheduleValue string) (repository.Reminder, error)
 	ListActiveReminders(ctx context.Context, telegramUserID int64) ([]repository.Reminder, error)
+	ListRemindersByActiveState(ctx context.Context, isActive bool) ([]repository.AdminReminderItem, error)
 	ListDueOneTimeReminders(ctx context.Context, nowTimestamp string) ([]repository.ReminderDueItem, error)
 	ListDueDailyReminders(ctx context.Context, scheduleValue string, dispatchDate string) ([]repository.ReminderDueItem, error)
 	MarkReminderDispatched(ctx context.Context, reminderID int64, dispatchDate string, deactivate bool) error
+	DeactivateReminder(ctx context.Context, reminderID int64) error
 }
 
 type ReminderService struct {
@@ -135,6 +151,29 @@ func (s *ReminderService) ListReminders(ctx context.Context, telegramUserID int6
 	return reminders, nil
 }
 
+func (s *ReminderService) ListRemindersByActiveState(ctx context.Context, isActive bool) ([]AdminReminder, error) {
+	records, err := s.store.ListRemindersByActiveState(ctx, isActive)
+	if err != nil {
+		return nil, err
+	}
+
+	reminders := make([]AdminReminder, 0, len(records))
+	for _, record := range records {
+		reminders = append(reminders, AdminReminder{
+			ID:              record.ID,
+			TelegramUserID:  record.TelegramUserID,
+			FirstName:       record.FirstName,
+			UserType:        record.UserType,
+			Text:            record.Text,
+			ScheduleType:    record.ScheduleType,
+			ScheduleDisplay: formatReminderSchedule(record.ScheduleType, record.ScheduleValue),
+			IsActive:        record.IsActive,
+		})
+	}
+
+	return reminders, nil
+}
+
 func (s *ReminderService) DueReminders(ctx context.Context, now time.Time) ([]PendingReminder, error) {
 	nowLocal := now.Local()
 
@@ -174,6 +213,21 @@ func (s *ReminderService) DueReminders(ctx context.Context, now time.Time) ([]Pe
 
 func (s *ReminderService) MarkReminderDispatched(ctx context.Context, reminderID int64, now time.Time, deactivate bool) error {
 	return s.store.MarkReminderDispatched(ctx, reminderID, now.Local().Format(dateLayout), deactivate)
+}
+
+func (s *ReminderService) RemoveReminder(ctx context.Context, reminderID int64) error {
+	if reminderID <= 0 {
+		return ErrReminderIDInvalid
+	}
+
+	if err := s.store.DeactivateReminder(ctx, reminderID); err != nil {
+		if errors.Is(err, repository.ErrReminderNotFound) {
+			return ErrReminderNotFound
+		}
+		return err
+	}
+
+	return nil
 }
 
 func parseReminderPayload(payload string, now time.Time) (string, string, string, error) {

@@ -60,6 +60,15 @@ func TestStartAndHelpHandlersIncludeShortcuts(t *testing.T) {
 	if !strings.Contains(help.Fields["text"], "/delete_love_notes <id> <id> ... - admin delete saved love notes") {
 		t.Fatalf("expected /help text to mention /delete_love_notes, got %q", help.Fields["text"])
 	}
+	if !strings.Contains(help.Fields["text"], "/list_reminders - admin list active reminders") {
+		t.Fatalf("expected /help text to mention /list_reminders, got %q", help.Fields["text"])
+	}
+	if !strings.Contains(help.Fields["text"], "/list_reminders inactive - admin list inactive reminders") {
+		t.Fatalf("expected /help text to mention /list_reminders inactive, got %q", help.Fields["text"])
+	}
+	if !strings.Contains(help.Fields["text"], "/remove_reminder <id> - admin remove reminder") {
+		t.Fatalf("expected /help text to mention /remove_reminder, got %q", help.Fields["text"])
+	}
 
 	helpKeyboard := parseReplyKeyboardMarkup(t, help.Fields["reply_markup"])
 	if !replyKeyboardContains(helpKeyboard, "My Reminders") {
@@ -886,6 +895,198 @@ func TestReminderCommands(t *testing.T) {
 		request := harness.client.lastRequest("sendMessage")
 		if request.Fields["text"] != "Your active reminders:\n- Daily at 08:00: vitamins" {
 			t.Fatalf("unexpected My Reminders response: %q", request.Fields["text"])
+		}
+	})
+
+	t.Run("list reminders forbids non admin user", func(t *testing.T) {
+		reminders := &reminderProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			reminders:           reminders,
+			adminTelegramUserID: 99,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/list_reminders"))
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != "Only admin can use reminder admin commands." {
+			t.Fatalf("unexpected non-admin /list_reminders response: %q", got)
+		}
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/remove_reminder 1"))
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != "Only admin can use reminder admin commands." {
+			t.Fatalf("unexpected non-admin /remove_reminder response: %q", got)
+		}
+	})
+
+	t.Run("list reminders sends empty active state", func(t *testing.T) {
+		reminders := &reminderProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			reminders:           reminders,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/list_reminders"))
+
+		if !reminders.adminListActive {
+			t.Fatal("expected active reminder list request")
+		}
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != "No active reminders yet." {
+			t.Fatalf("unexpected /list_reminders empty response: %q", got)
+		}
+	})
+
+	t.Run("list reminders sends empty inactive state", func(t *testing.T) {
+		reminders := &reminderProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			reminders:           reminders,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/list_reminders inactive"))
+
+		if reminders.adminListActive {
+			t.Fatal("expected inactive reminder list request")
+		}
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != "No inactive reminders yet." {
+			t.Fatalf("unexpected /list_reminders inactive empty response: %q", got)
+		}
+	})
+
+	t.Run("list reminders sends formatted active items", func(t *testing.T) {
+		reminders := &reminderProviderSpy{
+			adminListResult: []service.AdminReminder{
+				{ID: 7, FirstName: "Anna", UserType: "wife", ScheduleDisplay: "Daily at 08:00", Text: "vitamins", IsActive: true},
+				{ID: 8, FirstName: "Misha", UserType: "husband", ScheduleDisplay: "Once at 2026-03-21 19:30", Text: "call mom", IsActive: true},
+			},
+		}
+		harness := newTestBotHarness(t, testBotDeps{
+			reminders:           reminders,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/list_reminders"))
+
+		got := harness.client.lastRequest("sendMessage").Fields["text"]
+		expected := "Active reminders:\n- #7 Anna (wife) Daily at 08:00: vitamins\n- #8 Misha (husband) Once at 2026-03-21 19:30: call mom"
+		if got != expected {
+			t.Fatalf("unexpected /list_reminders success response: %q", got)
+		}
+	})
+
+	t.Run("list reminders sends formatted inactive items", func(t *testing.T) {
+		reminders := &reminderProviderSpy{
+			adminListResult: []service.AdminReminder{
+				{ID: 4, FirstName: "Anna", UserType: "wife", ScheduleDisplay: "Daily at 21:00", Text: "old reminder", IsActive: false},
+			},
+		}
+		harness := newTestBotHarness(t, testBotDeps{
+			reminders:           reminders,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/list_reminders inactive"))
+
+		got := harness.client.lastRequest("sendMessage").Fields["text"]
+		expected := "Inactive reminders:\n- #4 Anna (wife) Daily at 21:00: old reminder"
+		if got != expected {
+			t.Fatalf("unexpected /list_reminders inactive response: %q", got)
+		}
+	})
+
+	t.Run("list reminders returns usage for invalid filter", func(t *testing.T) {
+		reminders := &reminderProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			reminders:           reminders,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/list_reminders archived"))
+
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != reminderListUsage() {
+			t.Fatalf("unexpected /list_reminders usage response: %q", got)
+		}
+	})
+
+	t.Run("list reminders splits large output into multiple messages", func(t *testing.T) {
+		items := make([]service.AdminReminder, 0, 60)
+		for i := 0; i < 60; i++ {
+			items = append(items, service.AdminReminder{
+				ID:              int64(100 + i),
+				FirstName:       "Anna",
+				UserType:        "wife",
+				ScheduleDisplay: "Daily at 08:00",
+				Text:            strings.Repeat("long reminder text ", 8),
+				IsActive:        true,
+			})
+		}
+		reminders := &reminderProviderSpy{adminListResult: items}
+		harness := newTestBotHarness(t, testBotDeps{
+			reminders:           reminders,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/list_reminders"))
+
+		requests := harness.client.requestsFor("sendMessage")
+		if len(requests) < 2 {
+			t.Fatalf("expected list output to split into multiple messages, got %d", len(requests))
+		}
+	})
+
+	t.Run("remove reminder returns usage for malformed payload", func(t *testing.T) {
+		reminders := &reminderProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			reminders:           reminders,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/remove_reminder nope"))
+
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != removeReminderUsage() {
+			t.Fatalf("unexpected /remove_reminder usage response: %q", got)
+		}
+	})
+
+	t.Run("remove reminder succeeds", func(t *testing.T) {
+		reminders := &reminderProviderSpy{}
+		harness := newTestBotHarness(t, testBotDeps{
+			reminders:           reminders,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/remove_reminder 7"))
+
+		if reminders.removeReminderID != 7 {
+			t.Fatalf("expected reminder id 7, got %d", reminders.removeReminderID)
+		}
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != "Reminder #7 removed." {
+			t.Fatalf("unexpected /remove_reminder success response: %q", got)
+		}
+	})
+
+	t.Run("remove reminder returns not found response", func(t *testing.T) {
+		reminders := &reminderProviderSpy{removeErr: service.ErrReminderNotFound}
+		harness := newTestBotHarness(t, testBotDeps{
+			reminders:           reminders,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/remove_reminder 7"))
+
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != "That reminder does not exist or is already inactive." {
+			t.Fatalf("unexpected /remove_reminder missing response: %q", got)
+		}
+	})
+
+	t.Run("remove reminder returns generic failure", func(t *testing.T) {
+		reminders := &reminderProviderSpy{removeErr: errors.New("boom")}
+		harness := newTestBotHarness(t, testBotDeps{
+			reminders:           reminders,
+			adminTelegramUserID: 1,
+		})
+
+		processUpdate(t, harness, newTextUpdate(1, 100, "/remove_reminder 7"))
+
+		if got := harness.client.lastRequest("sendMessage").Fields["text"]; got != "I could not remove that reminder right now. Please try again in a moment." {
+			t.Fatalf("unexpected /remove_reminder failure response: %q", got)
 		}
 	})
 }

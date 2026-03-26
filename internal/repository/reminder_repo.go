@@ -3,8 +3,11 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
+
+var ErrReminderNotFound = errors.New("reminder not found")
 
 type ReminderDueItem struct {
 	ID             int64
@@ -96,6 +99,35 @@ func (r *ReminderRepository) ListActiveReminders(ctx context.Context, telegramUs
 	}
 
 	return reminders, nil
+}
+
+func (r *ReminderRepository) ListRemindersByActiveState(ctx context.Context, isActive bool) ([]AdminReminderItem, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT r.id, u.telegram_user_id, u.first_name, u.type, r.text, r.schedule_type, r.schedule_value, r.is_active
+		FROM reminders r
+		JOIN users u ON u.id = r.user_id
+		WHERE r.is_active = ?
+		ORDER BY u.first_name ASC, r.schedule_type ASC, r.schedule_value ASC, r.id ASC
+	`, isActive)
+	if err != nil {
+		return nil, fmt.Errorf("list reminders by active state: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]AdminReminderItem, 0)
+	for rows.Next() {
+		var item AdminReminderItem
+		if err := rows.Scan(&item.ID, &item.TelegramUserID, &item.FirstName, &item.UserType, &item.Text, &item.ScheduleType, &item.ScheduleValue, &item.IsActive); err != nil {
+			return nil, fmt.Errorf("scan admin reminder item: %w", err)
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate admin reminder items: %w", err)
+	}
+
+	return items, nil
 }
 
 func (r *ReminderRepository) ListDueOneTimeReminders(ctx context.Context, nowTimestamp string) ([]ReminderDueItem, error) {
@@ -192,6 +224,27 @@ func (r *ReminderRepository) MarkReminderDispatched(ctx context.Context, reminde
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit reminder dispatch transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (r *ReminderRepository) DeactivateReminder(ctx context.Context, reminderID int64) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE reminders
+		SET is_active = 0
+		WHERE id = ? AND is_active = 1
+	`, reminderID)
+	if err != nil {
+		return fmt.Errorf("deactivate reminder: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read deactivated reminder rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrReminderNotFound
 	}
 
 	return nil

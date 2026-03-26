@@ -20,6 +20,17 @@ type Reminder struct {
 	IsActive      bool
 }
 
+type AdminReminderItem struct {
+	ID             int64
+	TelegramUserID int64
+	FirstName      string
+	UserType       string
+	Text           string
+	ScheduleType   string
+	ScheduleValue  string
+	IsActive       bool
+}
+
 type Memory struct {
 	ID                 int64
 	UserID             int64

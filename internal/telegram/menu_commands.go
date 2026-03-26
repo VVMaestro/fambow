@@ -26,6 +26,8 @@ func registerMenuCommands(ctx context.Context, b *bot.Bot, logger *slog.Logger) 
 		{Command: "create_user", Description: "Admin: create bot user"},
 		{Command: "list_love_notes", Description: "Admin: list saved love notes"},
 		{Command: "delete_love_notes", Description: "Admin: delete saved love notes"},
+		{Command: "list_reminders", Description: "Admin: list reminders"},
+		{Command: "remove_reminder", Description: "Admin: remove reminder"},
 		{Command: "money_set", Description: "Admin: set user pan-coins"},
 		{Command: "stuff_add", Description: "Admin: add market stuff"},
 		{Command: "stuff_remove", Description: "Admin: remove market stuff"},

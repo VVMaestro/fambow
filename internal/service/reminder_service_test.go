@@ -28,6 +28,13 @@ type reminderStoreSpy struct {
 	listTelegramUserID int64
 	listResult         []repository.Reminder
 	listErr            error
+
+	adminListActive bool
+	adminListResult []repository.AdminReminderItem
+	adminListErr    error
+
+	deactivateReminderID int64
+	deactivateErr        error
 }
 
 func (s *reminderStoreSpy) SaveReminder(_ context.Context, telegramUserID int64, firstName string, text string, scheduleType string, scheduleValue string) (repository.Reminder, error) {
@@ -52,6 +59,11 @@ func (s *reminderStoreSpy) ListActiveReminders(_ context.Context, telegramUserID
 	return s.listResult, s.listErr
 }
 
+func (s *reminderStoreSpy) ListRemindersByActiveState(_ context.Context, isActive bool) ([]repository.AdminReminderItem, error) {
+	s.adminListActive = isActive
+	return s.adminListResult, s.adminListErr
+}
+
 func (s *reminderStoreSpy) ListDueOneTimeReminders(context.Context, string) ([]repository.ReminderDueItem, error) {
 	return nil, nil
 }
@@ -62,6 +74,11 @@ func (s *reminderStoreSpy) ListDueDailyReminders(context.Context, string, string
 
 func (s *reminderStoreSpy) MarkReminderDispatched(context.Context, int64, string, bool) error {
 	return nil
+}
+
+func (s *reminderStoreSpy) DeactivateReminder(_ context.Context, reminderID int64) error {
+	s.deactivateReminderID = reminderID
+	return s.deactivateErr
 }
 
 func TestParseReminderPayload(t *testing.T) {
@@ -218,4 +235,77 @@ func TestReminderServiceListRemindersFormatsDisplay(t *testing.T) {
 	if reminders[1].ScheduleDisplay != "Once at 2026-03-21 19:30" {
 		t.Fatalf("unexpected second ScheduleDisplay: %q", reminders[1].ScheduleDisplay)
 	}
+}
+
+func TestReminderServiceListRemindersByActiveStateFormatsDisplay(t *testing.T) {
+	store := &reminderStoreSpy{
+		adminListResult: []repository.AdminReminderItem{
+			{ID: 1, TelegramUserID: 22, FirstName: "Anna", UserType: "wife", Text: "vitamins", ScheduleType: reminderScheduleDaily, ScheduleValue: "08:00", IsActive: true},
+			{ID: 2, TelegramUserID: 33, FirstName: "Misha", UserType: "husband", Text: "call mom", ScheduleType: reminderScheduleOneTime, ScheduleValue: "2026-03-21 19:30:00", IsActive: true},
+		},
+	}
+	svc := NewReminderService(store)
+
+	reminders, err := svc.ListRemindersByActiveState(context.Background(), true)
+	if err != nil {
+		t.Fatalf("ListRemindersByActiveState() unexpected error: %v", err)
+	}
+
+	if !store.adminListActive {
+		t.Fatal("expected active-state list request")
+	}
+	if len(reminders) != 2 {
+		t.Fatalf("expected 2 reminders, got %d", len(reminders))
+	}
+	if reminders[0].ScheduleDisplay != "Daily at 08:00" {
+		t.Fatalf("unexpected first ScheduleDisplay: %q", reminders[0].ScheduleDisplay)
+	}
+	if reminders[1].ScheduleDisplay != "Once at 2026-03-21 19:30" {
+		t.Fatalf("unexpected second ScheduleDisplay: %q", reminders[1].ScheduleDisplay)
+	}
+}
+
+func TestReminderServiceListRemindersByActiveStatePassesInactiveFlag(t *testing.T) {
+	store := &reminderStoreSpy{}
+	svc := NewReminderService(store)
+
+	if _, err := svc.ListRemindersByActiveState(context.Background(), false); err != nil {
+		t.Fatalf("ListRemindersByActiveState() unexpected error: %v", err)
+	}
+	if store.adminListActive {
+		t.Fatal("expected inactive-state list request")
+	}
+}
+
+func TestReminderServiceRemoveReminderValidationAndErrorMapping(t *testing.T) {
+	t.Run("invalid reminder id", func(t *testing.T) {
+		svc := NewReminderService(&reminderStoreSpy{})
+
+		err := svc.RemoveReminder(context.Background(), 0)
+		if !errors.Is(err, ErrReminderIDInvalid) {
+			t.Fatalf("expected ErrReminderIDInvalid, got %v", err)
+		}
+	})
+
+	t.Run("repository not found", func(t *testing.T) {
+		store := &reminderStoreSpy{deactivateErr: repository.ErrReminderNotFound}
+		svc := NewReminderService(store)
+
+		err := svc.RemoveReminder(context.Background(), 7)
+		if !errors.Is(err, ErrReminderNotFound) {
+			t.Fatalf("expected ErrReminderNotFound, got %v", err)
+		}
+	})
+
+	t.Run("success passes reminder id", func(t *testing.T) {
+		store := &reminderStoreSpy{}
+		svc := NewReminderService(store)
+
+		if err := svc.RemoveReminder(context.Background(), 7); err != nil {
+			t.Fatalf("RemoveReminder() unexpected error: %v", err)
+		}
+		if store.deactivateReminderID != 7 {
+			t.Fatalf("expected reminder id 7, got %d", store.deactivateReminderID)
+		}
+	})
 }

@@ -32,6 +32,8 @@ type ReminderProvider interface {
 	AddReminder(ctx context.Context, telegramUserID int64, firstName string, command string) (service.Reminder, error)
 	AddReminderForUserType(ctx context.Context, userType string, command string) (service.Reminder, error)
 	ListReminders(ctx context.Context, telegramUserID int64) ([]service.Reminder, error)
+	ListRemindersByActiveState(ctx context.Context, isActive bool) ([]service.AdminReminder, error)
+	RemoveReminder(ctx context.Context, reminderID int64) error
 }
 
 type LoveNoteScheduleProvider interface {

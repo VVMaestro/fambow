@@ -22,4 +22,10 @@ func TestRegisterMenuCommandsIncludesLoveNoteAdminCommands(t *testing.T) {
 	if !strings.Contains(raw, `"command":"delete_love_notes"`) {
 		t.Fatalf("expected menu commands to include delete_love_notes, got %q", raw)
 	}
+	if !strings.Contains(raw, `"command":"list_reminders"`) {
+		t.Fatalf("expected menu commands to include list_reminders, got %q", raw)
+	}
+	if !strings.Contains(raw, `"command":"remove_reminder"`) {
+		t.Fatalf("expected menu commands to include remove_reminder, got %q", raw)
+	}
 }
