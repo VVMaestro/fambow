@@ -41,6 +41,7 @@ type DeleteLoveNotesResult struct {
 type LoveNoteStore interface {
 	AddLoveNote(ctx context.Context, note repository.LoveNote) error
 	RandomNote(ctx context.Context) (repository.LoveNote, error)
+	NextRandomNoteForUser(ctx context.Context, telegramUserID int64) (repository.LoveNote, error)
 	ListLoveNotes(ctx context.Context) ([]repository.LoveNote, error)
 	DeleteLoveNotes(ctx context.Context, noteIDs []int64) ([]int64, error)
 }
@@ -85,6 +86,35 @@ func (s *LoveNoteService) RandomNote(ctx context.Context, firstName string) (Lov
 	}
 
 	storedNote, err := s.store.RandomNote(ctx)
+	if err != nil {
+		return LoveNote{}, err
+	}
+
+	note := LoveNote{
+		Text:               strings.TrimSpace(storedNote.Text),
+		TelegramFileID:     strings.TrimSpace(storedNote.TelegramFileID),
+		TelegramFileUnique: strings.TrimSpace(storedNote.TelegramFileUnique),
+	}
+
+	if note.Text == "" && note.TelegramFileID == "" {
+		return LoveNote{}, ErrLoveNotesEmpty
+	}
+
+	note.Text = formatLoveNoteText(note.Text, name)
+	return note, nil
+}
+
+func (s *LoveNoteService) NextNoteForUser(ctx context.Context, telegramUserID int64, firstName string) (LoveNote, error) {
+	if s.store == nil {
+		return LoveNote{}, ErrLoveNotesEmpty
+	}
+
+	name := strings.TrimSpace(firstName)
+	if name == "" {
+		name = "my love"
+	}
+
+	storedNote, err := s.store.NextRandomNoteForUser(ctx, telegramUserID)
 	if err != nil {
 		return LoveNote{}, err
 	}

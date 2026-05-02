@@ -14,6 +14,9 @@ type loveNoteStoreSpy struct {
 	addErr       error
 	randomResult repository.LoveNote
 	randomErr    error
+	nextUserID   int64
+	nextResult   repository.LoveNote
+	nextErr      error
 	listResult   []repository.LoveNote
 	listErr      error
 	deleteIDs    []int64
@@ -28,6 +31,11 @@ func (s *loveNoteStoreSpy) AddLoveNote(_ context.Context, note repository.LoveNo
 
 func (s *loveNoteStoreSpy) RandomNote(_ context.Context) (repository.LoveNote, error) {
 	return s.randomResult, s.randomErr
+}
+
+func (s *loveNoteStoreSpy) NextRandomNoteForUser(_ context.Context, telegramUserID int64) (repository.LoveNote, error) {
+	s.nextUserID = telegramUserID
+	return s.nextResult, s.nextErr
 }
 
 func (s *loveNoteStoreSpy) ListLoveNotes(context.Context) ([]repository.LoveNote, error) {
@@ -140,6 +148,23 @@ func TestRandomLoveNoteFormatsTemplateText(t *testing.T) {
 		t.Fatalf("RandomNote() unexpected error: %v", err)
 	}
 
+	if note.Text != "Hey Anna, you are magic." {
+		t.Fatalf("unexpected formatted text: %#v", note)
+	}
+}
+
+func TestNextNoteForUserFormatsTemplateText(t *testing.T) {
+	store := &loveNoteStoreSpy{nextResult: repository.LoveNote{Text: "Hey %s, you are magic."}}
+	svc := NewLoveNoteService(store)
+
+	note, err := svc.NextNoteForUser(context.Background(), 42, "Anna")
+	if err != nil {
+		t.Fatalf("NextNoteForUser() unexpected error: %v", err)
+	}
+
+	if store.nextUserID != 42 {
+		t.Fatalf("expected telegram user id 42, got %d", store.nextUserID)
+	}
 	if note.Text != "Hey Anna, you are magic." {
 		t.Fatalf("unexpected formatted text: %#v", note)
 	}

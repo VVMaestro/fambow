@@ -501,7 +501,12 @@ func surpriseMemoryHandler(logger *slog.Logger, memories MemoryProvider) bot.Han
 			return
 		}
 
-		record, err := memories.RandomMemory(ctx)
+		telegramUserID := int64(0)
+		if update.Message.From != nil {
+			telegramUserID = update.Message.From.ID
+		}
+
+		record, err := memories.RandomMemoryForUser(ctx, telegramUserID)
 		if err != nil {
 			if errors.Is(err, service.ErrMemoryNotFound) {
 				sendText(ctx, b, update.Message.Chat.ID, "No saved memories yet. Add one with /memory <text> or photo caption /memory.", logger, "/surprise_memory empty")

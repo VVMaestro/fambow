@@ -16,7 +16,7 @@ type BotRunner interface {
 }
 
 type LoveNoteProvider interface {
-	RandomNote(ctx context.Context, firstName string) (service.LoveNote, error)
+	NextNoteForUser(ctx context.Context, telegramUserID int64, firstName string) (service.LoveNote, error)
 	AddLoveNote(ctx context.Context, input service.LoveNoteInput) error
 	ListLoveNotes(ctx context.Context) ([]service.AdminLoveNote, error)
 	DeleteLoveNotes(ctx context.Context, noteIDs []int64) (service.DeleteLoveNotesResult, error)
@@ -25,7 +25,7 @@ type LoveNoteProvider interface {
 type MemoryProvider interface {
 	AddMemory(ctx context.Context, telegramUserID int64, firstName string, input service.MemoryInput) (service.Memory, error)
 	RecentMemories(ctx context.Context, telegramUserID int64, limit int) ([]service.Memory, error)
-	RandomMemory(ctx context.Context) (service.Memory, error)
+	RandomMemoryForUser(ctx context.Context, telegramUserID int64) (service.Memory, error)
 }
 
 type ReminderProvider interface {

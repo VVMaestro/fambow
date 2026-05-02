@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+type queryRower interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 const (
 	UserTypeHusband = "husband"
 	UserTypeWife    = "wife"
@@ -135,7 +139,7 @@ func (r *UserRepository) SetMoneyByTelegramUserID(ctx context.Context, telegramU
 	return r.FindByTelegramUserID(ctx, telegramUserID)
 }
 
-func userIDByTelegramUserID(ctx context.Context, db *sql.DB, telegramUserID int64) (int64, error) {
+func userIDByTelegramUserID(ctx context.Context, db queryRower, telegramUserID int64) (int64, error) {
 	row := db.QueryRowContext(ctx, `
 		SELECT id
 		FROM users

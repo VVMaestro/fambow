@@ -84,11 +84,13 @@ func loveHandler(logger *slog.Logger, loveNotes LoveNoteProvider) bot.HandlerFun
 		}
 
 		firstName := ""
+		telegramUserID := int64(0)
 		if update.Message.From != nil {
 			firstName = update.Message.From.FirstName
+			telegramUserID = update.Message.From.ID
 		}
 
-		note, err := loveNotes.RandomNote(ctx, firstName)
+		note, err := loveNotes.NextNoteForUser(ctx, telegramUserID, firstName)
 		if err != nil {
 			if errors.Is(err, service.ErrLoveNotesEmpty) {
 				SendLoveNotesEmptyState(ctx, b, update.Message.Chat.ID, commandKeyboard(), logger)

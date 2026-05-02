@@ -35,6 +35,7 @@ type MemoryStore interface {
 	SaveMemory(ctx context.Context, telegramUserID int64, firstName string, text string, telegramFileID string, telegramFileUnique string, createdAt *time.Time) (repository.Memory, error)
 	ListRecentMemories(ctx context.Context, telegramUserID int64, limit int) ([]repository.Memory, error)
 	RandomMemory(ctx context.Context) (repository.Memory, error)
+	NextRandomMemoryForUser(ctx context.Context, telegramUserID int64) (repository.Memory, error)
 }
 
 type MemoryService struct {
@@ -107,6 +108,23 @@ func (s *MemoryService) RecentMemories(ctx context.Context, telegramUserID int64
 
 func (s *MemoryService) RandomMemory(ctx context.Context) (Memory, error) {
 	record, err := s.store.RandomMemory(ctx)
+	if err != nil {
+		if errors.Is(err, repository.ErrMemoryNotFound) {
+			return Memory{}, ErrMemoryNotFound
+		}
+		return Memory{}, err
+	}
+
+	return Memory{
+		Text:               record.Text,
+		CreatedAt:          record.CreatedAt,
+		TelegramFileID:     record.TelegramFileID,
+		TelegramFileUnique: record.TelegramFileUnique,
+	}, nil
+}
+
+func (s *MemoryService) RandomMemoryForUser(ctx context.Context, telegramUserID int64) (Memory, error) {
+	record, err := s.store.NextRandomMemoryForUser(ctx, telegramUserID)
 	if err != nil {
 		if errors.Is(err, repository.ErrMemoryNotFound) {
 			return Memory{}, ErrMemoryNotFound

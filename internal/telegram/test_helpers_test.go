@@ -301,6 +301,7 @@ func inlineKeyboardContains(markup models.InlineKeyboardMarkup, label string) bo
 }
 
 type loveNoteProviderSpy struct {
+	randomUserID    int64
 	randomFirstName string
 	randomResult    service.LoveNote
 	randomErr       error
@@ -313,7 +314,8 @@ type loveNoteProviderSpy struct {
 	deleteErr       error
 }
 
-func (s *loveNoteProviderSpy) RandomNote(_ context.Context, firstName string) (service.LoveNote, error) {
+func (s *loveNoteProviderSpy) NextNoteForUser(_ context.Context, telegramUserID int64, firstName string) (service.LoveNote, error) {
+	s.randomUserID = telegramUserID
 	s.randomFirstName = firstName
 	return s.randomResult, s.randomErr
 }
@@ -344,6 +346,7 @@ type memoryProviderSpy struct {
 	recentResult []service.Memory
 	recentErr    error
 
+	randomUserID int64
 	randomResult service.Memory
 	randomErr    error
 }
@@ -361,7 +364,8 @@ func (s *memoryProviderSpy) RecentMemories(_ context.Context, telegramUserID int
 	return s.recentResult, s.recentErr
 }
 
-func (s *memoryProviderSpy) RandomMemory(_ context.Context) (service.Memory, error) {
+func (s *memoryProviderSpy) RandomMemoryForUser(_ context.Context, telegramUserID int64) (service.Memory, error) {
+	s.randomUserID = telegramUserID
 	return s.randomResult, s.randomErr
 }
 

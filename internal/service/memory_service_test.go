@@ -13,9 +13,12 @@ type memoryStoreSpy struct {
 	saveCalled bool
 	saveInput  memorySaveInput
 
-	randomCalled bool
-	randomResult repository.Memory
-	randomErr    error
+	randomCalled     bool
+	randomResult     repository.Memory
+	randomErr        error
+	randomUserID     int64
+	randomUserResult repository.Memory
+	randomUserErr    error
 
 	result repository.Memory
 	err    error
@@ -83,6 +86,16 @@ func (s *memoryStoreSpy) RandomMemory(ctx context.Context) (repository.Memory, e
 	}
 
 	return s.randomResult, nil
+}
+
+func (s *memoryStoreSpy) NextRandomMemoryForUser(ctx context.Context, telegramUserID int64) (repository.Memory, error) {
+	_ = ctx
+	s.randomUserID = telegramUserID
+	if s.randomUserErr != nil {
+		return repository.Memory{}, s.randomUserErr
+	}
+
+	return s.randomUserResult, nil
 }
 
 func TestAddMemoryWithoutCustomDate(t *testing.T) {
@@ -259,6 +272,41 @@ func TestRandomMemoryNotFound(t *testing.T) {
 	svc := NewMemoryService(store)
 
 	_, err := svc.RandomMemory(context.Background())
+	if !errors.Is(err, ErrMemoryNotFound) {
+		t.Fatalf("expected ErrMemoryNotFound, got %v", err)
+	}
+}
+
+func TestRandomMemoryForUser(t *testing.T) {
+	createdAt := time.Date(2024, time.June, 1, 10, 30, 0, 0, time.Local)
+	store := &memoryStoreSpy{randomUserResult: repository.Memory{
+		Text:               "Road trip to the sea",
+		CreatedAt:          createdAt,
+		TelegramFileID:     "photo-123",
+		TelegramFileUnique: "photo-uniq-123",
+	}}
+	svc := NewMemoryService(store)
+
+	memory, err := svc.RandomMemoryForUser(context.Background(), 77)
+	if err != nil {
+		t.Fatalf("RandomMemoryForUser() unexpected error: %v", err)
+	}
+	if store.randomUserID != 77 {
+		t.Fatalf("expected telegram user id 77, got %d", store.randomUserID)
+	}
+	if memory.Text != store.randomUserResult.Text {
+		t.Fatalf("memory text mismatch: got %q", memory.Text)
+	}
+	if !memory.CreatedAt.Equal(createdAt) {
+		t.Fatalf("memory date mismatch: got %s", memory.CreatedAt)
+	}
+}
+
+func TestRandomMemoryForUserNotFound(t *testing.T) {
+	store := &memoryStoreSpy{randomUserErr: repository.ErrMemoryNotFound}
+	svc := NewMemoryService(store)
+
+	_, err := svc.RandomMemoryForUser(context.Background(), 77)
 	if !errors.Is(err, ErrMemoryNotFound) {
 		t.Fatalf("expected ErrMemoryNotFound, got %v", err)
 	}

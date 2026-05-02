@@ -96,6 +96,9 @@ func TestLoveCommands(t *testing.T) {
 		if loveNotes.randomFirstName != "Anna" {
 			t.Fatalf("expected first name Anna, got %q", loveNotes.randomFirstName)
 		}
+		if loveNotes.randomUserID != 1 {
+			t.Fatalf("expected telegram user id 1, got %d", loveNotes.randomUserID)
+		}
 
 		keyboard := parseReplyKeyboardMarkup(t, request.Fields["reply_markup"])
 		if !replyKeyboardContains(keyboard, "My Reminders") {
@@ -681,6 +684,9 @@ func TestMemoryCommands(t *testing.T) {
 		if request.Fields["text"] != "No saved memories yet. Add one with /memory <text> or photo caption /memory." {
 			t.Fatalf("unexpected /surprise_memory empty response: %q", request.Fields["text"])
 		}
+		if memories.randomUserID != 1 {
+			t.Fatalf("expected surprise memory telegram user id 1, got %d", memories.randomUserID)
+		}
 	})
 
 	t.Run("surprise memory sends header and photo", func(t *testing.T) {
@@ -706,6 +712,9 @@ func TestMemoryCommands(t *testing.T) {
 		}
 		if requests[1].Method != "sendPhoto" || requests[1].Fields["caption"] != "Photo memory (2026-03-03)" {
 			t.Fatalf("unexpected surprise memory photo response: %#v", requests[1])
+		}
+		if memories.randomUserID != 1 {
+			t.Fatalf("expected surprise memory telegram user id 1, got %d", memories.randomUserID)
 		}
 	})
 }

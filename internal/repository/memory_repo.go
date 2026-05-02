@@ -129,6 +129,30 @@ func (r *MemoryRepository) RandomMemory(ctx context.Context) (Memory, error) {
 	return memory, nil
 }
 
+func (r *MemoryRepository) NextRandomMemoryForUser(ctx context.Context, telegramUserID int64) (Memory, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Memory{}, fmt.Errorf("begin memory cycle transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	userID, err := userIDByTelegramUserID(ctx, tx, telegramUserID)
+	if err != nil {
+		return Memory{}, err
+	}
+
+	memory, err := nextRandomMemoryForUser(ctx, tx, userID)
+	if err != nil {
+		return Memory{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Memory{}, fmt.Errorf("commit memory cycle transaction: %w", err)
+	}
+
+	return memory, nil
+}
+
 func (r *MemoryRepository) ensureUser(ctx context.Context, telegramUserID int64, firstName string) (int64, error) {
 	_ = firstName
 	userID, err := userIDByTelegramUserID(ctx, r.db, telegramUserID)
@@ -137,4 +161,72 @@ func (r *MemoryRepository) ensureUser(ctx context.Context, telegramUserID int64,
 	}
 
 	return userID, nil
+}
+
+func nextRandomMemoryForUser(ctx context.Context, tx *sql.Tx, userID int64) (Memory, error) {
+	memory, found, err := selectUnseenMemory(ctx, tx, userID)
+	if err != nil {
+		return Memory{}, err
+	}
+	if found {
+		return memory, nil
+	}
+
+	var hasMemories bool
+	if err := tx.QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM memories)
+	`).Scan(&hasMemories); err != nil {
+		return Memory{}, fmt.Errorf("check memories existence: %w", err)
+	}
+	if !hasMemories {
+		return Memory{}, ErrMemoryNotFound
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM memory_user_cycle
+		WHERE user_id = ?
+	`, userID); err != nil {
+		return Memory{}, fmt.Errorf("reset memory cycle: %w", err)
+	}
+
+	memory, found, err = selectUnseenMemory(ctx, tx, userID)
+	if err != nil {
+		return Memory{}, err
+	}
+	if !found {
+		return Memory{}, ErrMemoryNotFound
+	}
+
+	return memory, nil
+}
+
+func selectUnseenMemory(ctx context.Context, tx *sql.Tx, userID int64) (Memory, bool, error) {
+	row := tx.QueryRowContext(ctx, `
+		SELECT m.id, m.user_id, m.text, m.telegram_file_id, m.telegram_file_unique_id, m.created_at
+		FROM memories m
+		WHERE NOT EXISTS (
+			SELECT 1
+			FROM memory_user_cycle c
+			WHERE c.user_id = ? AND c.memory_id = m.id
+		)
+		ORDER BY RANDOM()
+		LIMIT 1
+	`, userID)
+
+	var memory Memory
+	if err := row.Scan(&memory.ID, &memory.UserID, &memory.Text, &memory.TelegramFileID, &memory.TelegramFileUnique, &memory.CreatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Memory{}, false, nil
+		}
+		return Memory{}, false, fmt.Errorf("query unseen memory: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO memory_user_cycle (user_id, memory_id)
+		VALUES (?, ?)
+	`, userID, memory.ID); err != nil {
+		return Memory{}, false, fmt.Errorf("insert memory cycle row: %w", err)
+	}
+
+	return memory, true, nil
 }
